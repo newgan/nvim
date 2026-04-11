@@ -1,0 +1,6 @@
+require("core.options")
+require("core.pack")
+require("core.autocmds")
+require("core.binds")
+require("core.lsp")
+require("core.ui2")
