@@ -1,6 +1,4 @@
-local fzf = require("fzf-lua")
-
-fzf.setup {
+require("fzf-lua").setup {
     oldfiles = {
         include_current_session = true,
         cwd_only = true,
@@ -30,12 +28,7 @@ vim.keymap.set("n", "<leader>fd", "<cmd>FzfLua lsp_document_symbols<cr>", { desc
 vim.keymap.set("n", "<leader>fb", "<cmd>FzfLua buffers<cr>", { desc = "find open buffers" })
 
 vim.keymap.set("n", "<leader>fz", "<cmd>FzfLua diagnostics_document<cr>", { desc = "find doc diagnostics" })
-vim.keymap.set(
-    "n",
-    "<leader>fZ",
-    "<cmd>FzfLua diagnostics_workspace<cr>",
-    { desc = "find workspace diagnostics" }
-)
+vim.keymap.set("n", "<leader>fZ", "<cmd>FzfLua diagnostics_workspace<cr>", { desc = "find workspace diagnostics" })
 
 vim.keymap.set("n", "<leader>fg", "<cmd>FzfLua git_files<cr>", { desc = "find git files" })
 vim.keymap.set("n", "<leader>fgc", "<cmd>FzfLua git_commits<cr>", { desc = "find git commits" })
