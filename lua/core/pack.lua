@@ -43,9 +43,16 @@ vim.pack.add({
 
     -- which key
     { src = "https://github.com/folke/which-key.nvim" },
+
+    -- oil
+    { src = "https://github.com/refractalize/oil-git-status.nvim" },
+    { src = "https://github.com/stevearc/oil.nvim" },
 }, { load = true, confirm = false })
+
+require('mini.icons').setup()
 
 require("plugins.fzf")
 require("plugins.treesitter")
 require("plugins.blink")
 require("plugins.compile-mode")
+require("plugins.oil")
