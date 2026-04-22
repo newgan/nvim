@@ -1,6 +1,5 @@
 vim.g.compile_mode = {
     input_word_completion = true,
-    use_pseudo_terminal = true,
     baleia_setup = true,
     default_command = "",
 }
