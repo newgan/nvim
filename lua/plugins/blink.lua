@@ -4,8 +4,8 @@ require("blink.cmp").setup {
     },
     keymap = {
         preset = "enter",
-        ["<C-n>"] = { "select_next", "snippet_forward", "fallback" },
-        ["<C-p>"] = { "select_prev", "snippet_backward", "fallback" },
+        ["<Tab>"] = { "select_next", "snippet_forward", "fallback" },
+        ["<S-Tab>"] = { "select_prev", "snippet_backward", "fallback" },
     },
     completion = {
         list = {
