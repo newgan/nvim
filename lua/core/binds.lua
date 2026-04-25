@@ -8,3 +8,5 @@ vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = 'move to left split' })
 vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = 'move to bottom split' })
 vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = 'move to top split' })
 vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = 'move to right split' })
+
+vim.keymap.set('n', '<leader>gd', '<cmd>Gitsigns diffthis<CR>', { desc = "gitsigns diff" })

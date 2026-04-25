@@ -47,12 +47,20 @@ vim.pack.add({
     -- oil
     { src = "https://github.com/refractalize/oil-git-status.nvim" },
     { src = "https://github.com/stevearc/oil.nvim" },
+
+    --gitsigns
+    { src = "https://github.com/lewis6991/gitsigns.nvim" },
+
+    -- lualine
+    { src = "https://github.com/nvim-lualine/lualine.nvim" },
 }, { load = true, confirm = false })
 
 require('mini.icons').setup()
 
+require("plugins.gitsigns")
 require("plugins.fzf")
 require("plugins.treesitter")
 require("plugins.blink")
 require("plugins.compile-mode")
 require("plugins.oil")
+require("plugins.status")
