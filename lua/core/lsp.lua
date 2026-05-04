@@ -4,8 +4,7 @@ vim.lsp.enable("rust_analyzer")         -- rust
 vim.lsp.enable("gopls")                 -- go
 vim.lsp.enable("ts_ls")                 -- ts, js
 vim.lsp.enable("ruff")                  -- python
-vim.lsp.enable("basedpyright")          -- python
-vim.lsp.enable("pyrefly")               -- python
+vim.lsp.enable("ty")                    -- python
 vim.lsp.enable("cmake-language-server") -- cmake
 
 vim.api.nvim_create_autocmd("LspAttach", {
