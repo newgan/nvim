@@ -1,0 +1,76 @@
+name: Bug Report
+description: Create a report to help us improve
+title: "[BUG] <title>"
+labels:
+  - bug
+assignees: ej-shafran
+body:
+  - type: checkboxes
+    attributes:
+      label: Existing Issues
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+        - label: I have searched the existing issues
+          required: true
+        - label: This is an inconsistency with the Emacs plugin
+
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: |
+        A clear and concise description of what the bug is.
+
+        Tip: you can drag-and-drop screenshots into this textarea.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Steps To Reproduce
+      description: |
+        Steps to reproduce the behavior.
+
+        It might be helpful to create a reproducible config file for someone trying to see the bug - you can use [this file](https://github.com/ej-shafran/compile-mode.nvim/raw/main/spec/configs/repro.lua) as a starting off point.
+      placeholder: |
+        1. Open a buffer
+        2. Run ':SomeCommand...'
+        3. See error
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Neovim Version
+      description: Include the result of `nvim -v` here. Please note that `compile-mode.nvim` only supports Neovim versions v0.10.0 and higher.
+      render: raw
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Plugin Version
+      description: In Neovim, run `:checkhealth compile-mode` and include the version listed under `compile-mode.nvim version`.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Configuration
+      description: Include your configuration for this plugin.
+      render: lua
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here, including any errors mentioned in `:checkhealth compile-mode`.
+    validations:
+      required: false
