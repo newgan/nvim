@@ -10,3 +10,41 @@ vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = 'move to top split' })
 vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = 'move to right split' })
 
 vim.keymap.set('n', '<leader>gd', '<cmd>Gitsigns diffthis<CR>', { desc = "gitsigns diff" })
+
+vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "clear search highlights" })
+vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "exit terminal mode" })
+
+local function yank_location(visual)
+    local path = vim.fn.expand("%:.")
+    if path == "" then
+        return vim.notify("no file name", vim.log.levels.WARN)
+    end
+    local text
+    if visual then
+        local first, last = vim.fn.line("v"), vim.fn.line(".")
+        if first > last then
+            first, last = last, first
+        end
+        local lines = vim.api.nvim_buf_get_lines(0, first - 1, last, false)
+        text = string.format("%s:%d-%d\n```%s\n%s\n```", path, first, last, vim.bo.filetype, table.concat(lines, "\n"))
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    else
+        text = string.format("%s:%d", path, vim.fn.line("."))
+    end
+    vim.fn.setreg("+", text)
+    vim.notify("yanked " .. text:match("^[^\n]*"))
+end
+vim.keymap.set("n", "<leader>yl", function() yank_location(false) end, { desc = "yank path:line for an agent" })
+vim.keymap.set("x", "<leader>yl", function() yank_location(true) end, { desc = "yank path:lines + code for an agent" })
+vim.keymap.set("n", "<leader>yf", function()
+    local path = vim.fn.expand("%:.")
+    vim.fn.setreg("+", path)
+    vim.notify("yanked " .. path)
+end, { desc = "yank file path" })
+
+vim.keymap.set("n", "<leader>tu", function()
+    if vim.fn.exists(":Undotree") == 0 then
+        vim.cmd.packadd("nvim.undotree")
+    end
+    vim.cmd.Undotree()
+end, { desc = "toggle undo tree" })

@@ -1,16 +1,32 @@
 -- Treesitter
 require('nvim-treesitter').setup({
     install_dir = vim.fn.stdpath('data') .. '/site',
-    auto_install = true,
 })
 
 require('nvim-treesitter-textobjects').setup({
+    select = {
+        lookahead = true,
+    },
     move = {
         set_jumps = true,
     },
 })
 
 local map = vim.keymap.set
+
+local select = require('nvim-treesitter-textobjects.select').select_textobject
+for key, capture in pairs({
+    af = '@function.outer',
+    ['if'] = '@function.inner',
+    ac = '@class.outer',
+    ic = '@class.inner',
+    aa = '@parameter.outer',
+    ia = '@parameter.inner',
+}) do
+    map({ 'x', 'o' }, key, function()
+        select(capture, 'textobjects')
+    end, { desc = 'select ' .. capture })
+end
 
 -- Movement
 map({ 'n', 'x', 'o' }, ']f', function()

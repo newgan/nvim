@@ -1,7 +1,14 @@
+local theme = require('lualine.themes.auto')
+for _, mode in pairs(theme) do
+    for _, section in pairs(mode) do
+        section.gui = nil
+    end
+end
+
 require('lualine').setup {
     options = {
         icons_enabled = true,
-        theme = 'auto',
+        theme = theme,
         component_separators = { left = "", right = "" },
         section_separators = { left = "", right = "" },
         disabled_filetypes = {

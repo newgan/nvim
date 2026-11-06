@@ -1,6 +1,8 @@
 require("core.options")
+require("core.filetypes")
 require("core.pack")
 require("core.autocmds")
 require("core.binds")
 require("core.lsp")
+require("core.runnables")
 require("core.ui2")

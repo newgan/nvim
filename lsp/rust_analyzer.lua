@@ -7,9 +7,7 @@ return {
 	},
 	settings = {
 		["rust-analyzer"] = {
-			diagnostics = {
-				enable = false,
-			},
+			checkOnSave = false,
 			imports = {
 				granularity = {
 					group = "module",

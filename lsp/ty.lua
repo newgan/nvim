@@ -1,11 +1,5 @@
 return {
     settings = {
-
-        ty = {
-
-            -- ty language server settings go here
-
-        }
-
-    }
+        ty = vim.empty_dict(),
+    },
 }

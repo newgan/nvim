@@ -14,6 +14,26 @@ vim.o.splitright = true
 vim.o.splitbelow = true
 -- multi line text behavior
 vim.o.smoothscroll = true
+vim.o.cursorline = true
+vim.o.scrolloff = 8
+vim.o.showmode = false
+vim.o.winborder = "rounded"
+vim.o.inccommand = "split"
+vim.o.updatetime = 250
+
+
+vim.o.foldmethod = "expr"
+vim.o.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+vim.o.foldlevel = 99
+vim.o.foldlevelstart = 99
+vim.o.foldtext = ""
+
+
+vim.o.undofile = true
+vim.o.confirm = true
+vim.o.exrc = true
+vim.o.sessionoptions = "buffers,curdir,tabpages,winsize,help,globals,skiprtp,folds"
+vim.opt.diffopt:append("algorithm:histogram")
 
 
 -- indentation --
@@ -40,6 +60,23 @@ vim.cmd.colorscheme("true-gruber-darker")
 
 
 -- clipboard --
+local osc52 = require("vim.ui.clipboard.osc52")
+vim.g.clipboard = {
+    name = "osc52",
+    copy = {
+        ["+"] = osc52.copy("+"),
+        ["*"] = osc52.copy("*"),
+    },
+    paste = {
+        ["+"] = function()
+            return vim.split(vim.fn.getreg('"'), "\n")
+        end,
+        ["*"] = function()
+            return vim.split(vim.fn.getreg('"'), "\n")
+        end,
+    },
+}
+
 vim.opt.clipboard:append("unnamedplus")
 
 

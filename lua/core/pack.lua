@@ -9,10 +9,6 @@ vim.api.nvim_create_autocmd('PackChanged', {
             pcall(function()
                 vim.cmd('TSUpdate')
             end)
-        elseif name == 'mason.nvim' then
-            pcall(function()
-                vim.cmd('MasonUpdate')
-            end)
         end
     end,
 })
@@ -48,19 +44,47 @@ vim.pack.add({
     { src = "https://github.com/refractalize/oil-git-status.nvim" },
     { src = "https://github.com/stevearc/oil.nvim" },
 
-    --gitsigns
     { src = "https://github.com/lewis6991/gitsigns.nvim" },
+    { src = "https://github.com/sindrets/diffview.nvim" },
 
     -- lualine
     { src = "https://github.com/nvim-lualine/lualine.nvim" },
+
+    { src = "https://github.com/nvim-mini/mini.pairs" },
+    { src = "https://github.com/jake-stewart/multicursor.nvim" },
+    { src = "https://github.com/MagicDuck/grug-far.nvim" },
+
+    { src = "https://github.com/folke/trouble.nvim" },
+    { src = "https://github.com/Bekaboo/dropbar.nvim" },
+    { src = "https://github.com/MeanderingProgrammer/render-markdown.nvim" },
+
+    { src = "https://github.com/folke/persistence.nvim" },
+
+    { src = "https://github.com/folke/lazydev.nvim" },
+
+    { src = "https://github.com/nvim-neotest/nvim-nio" },
+    { src = "https://github.com/mfussenegger/nvim-dap" },
+    { src = "https://github.com/rcarriga/nvim-dap-ui" },
 }, { load = true, confirm = false })
 
 require('mini.icons').setup()
+require('mini.icons').mock_nvim_web_devicons()
 
 require("plugins.gitsigns")
+require("plugins.diffview")
 require("plugins.fzf")
 require("plugins.treesitter")
 require("plugins.blink")
 require("plugins.compile-mode")
 require("plugins.oil")
 require("plugins.status")
+require("plugins.which-key")
+require("plugins.pairs")
+require("plugins.multicursor")
+require("plugins.grug-far")
+require("plugins.trouble")
+require("plugins.dropbar")
+require("plugins.render-markdown")
+require("plugins.persistence")
+require("plugins.lazydev")
+require("plugins.dap")

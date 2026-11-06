@@ -7,16 +7,9 @@ return {
     end,
     init_options = {
         settings = {
-            args = {
-                "--ignore",
-                "F821",
-                "--ignore",
-                "E402",
-                "ignore",
-                "E722",
-                "--ignore",
-                "E712"
-            }
+            lint = {
+                ignore = { "F821", "E402", "E722", "E712" },
+            },
         },
     },
 }
