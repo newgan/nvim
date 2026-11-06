@@ -1,6 +1,6 @@
 vim.g.compile_mode = {
     input_word_completion = true,
-    baleia_setup = true,
+    ansi_color = { kind = "render" },
     default_command = "",
     error_regexp_table = {
         rustc = {

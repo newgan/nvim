@@ -34,7 +34,6 @@ vim.pack.add({
 
     -- compile mode
     { src = "https://github.com/nvim-lua/plenary.nvim" },
-    { src = "https://github.com/ej-shafran/compile-mode.nvim",               version = "nightly" },
     { src = "https://github.com/m00qek/baleia.nvim",                         version = "v1.4.0" },
 
     -- which key

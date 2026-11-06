@@ -10,11 +10,6 @@
       "src": "https://github.com/saghen/blink.cmp",
       "version": "1.0.0 - 2.0.0"
     },
-    "compile-mode.nvim": {
-      "rev": "dd3e952076a33faba0a55b04b2b73945832c0527",
-      "src": "https://github.com/ej-shafran/compile-mode.nvim",
-      "version": "'nightly'"
-    },
     "diffview.nvim": {
       "rev": "4516612fe98ff56ae0415a259ff6361a89419b0a",
       "src": "https://github.com/sindrets/diffview.nvim"

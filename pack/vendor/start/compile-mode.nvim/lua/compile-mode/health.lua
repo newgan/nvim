@@ -11,7 +11,9 @@ function health.check()
 		local compile_mode_repo = vim.fs.dirname(file)
 		local version = vim.system({ "git", "describe" }, { cwd = compile_mode_repo }):wait()
 		if version.code ~= 0 then
-			vim.health.error(("failed to get git information:\n%s"):format(version.stderr))
+			-- local change: this copy is a git subtree of the nvim config, which has no
+			-- tags, so `git describe` fails there; that is not an error
+			vim.health.info("vendored subtree (see CHANGELOG.md for the upstream version)")
 		else
 			vim.health.info(vim.fn.trim(version.stdout))
 		end
