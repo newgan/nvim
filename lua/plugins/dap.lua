@@ -118,3 +118,21 @@ map("n", "<leader>dt", dap.terminate, { desc = "terminate" })
 map("n", "<leader>dr", dap.repl.toggle, { desc = "toggle repl" })
 map("n", "<leader>du", dapui.toggle, { desc = "toggle debug ui" })
 map({ "n", "x" }, "<leader>de", dapui.eval, { desc = "evaluate expression" })
+map("n", "<leader>dh", function() require("dap.ui.widgets").hover() end, { desc = "hover value" })
+map("n", "<leader>dL", function()
+    dap.set_breakpoint(nil, nil, vim.fn.input("Log message: "))
+end, { desc = "log point" })
+map("n", "<leader>dX", dap.clear_breakpoints, { desc = "clear breakpoints" })
+map("n", "<leader>dk", dap.up, { desc = "frame up" })
+map("n", "<leader>dj", dap.down, { desc = "frame down" })
+map("n", "<leader>dR", dap.restart, { desc = "restart" })
+map("n", "<leader>dp", "<cmd>FzfLua dap_breakpoints<cr>", { desc = "breakpoints" })
+map("n", "<leader>df", "<cmd>FzfLua dap_frames<cr>", { desc = "stack frames" })
+map("n", "<leader>dv", "<cmd>FzfLua dap_variables<cr>", { desc = "variables" })
+map("n", "<leader>da", "<cmd>FzfLua dap_commands<cr>", { desc = "dap commands" })
+
+vim.api.nvim_create_autocmd("FileType", {
+    group = vim.api.nvim_create_augroup("DapReplCompletion", { clear = true }),
+    pattern = "dap-repl",
+    callback = function(ev) require("dap.ext.autocompl").attach(ev.buf) end,
+})

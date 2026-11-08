@@ -26,6 +26,11 @@ local compile_status = {
     end,
 }
 
+local dap_status = {
+    function() return require("dap").status() end,
+    cond = function() return package.loaded.dap ~= nil and require("dap").session() ~= nil end,
+}
+
 local compile_ext = vim.deepcopy(require("compile-mode.extensions.lualine"))
 compile_ext.sections.lualine_b[1].color = "CompileModeError"
 compile_ext.sections.lualine_b[2].color = "CompileModeWarning"
@@ -77,7 +82,7 @@ require('lualine').setup {
             },
         },
         lualine_c = { { 'filename', path = 1 } },
-        lualine_x = { compile_status, "searchcount", "%S" },
+        lualine_x = { dap_status, compile_status, "searchcount", "%S" },
         lualine_y = { 'progress' },
         lualine_z = {
             "diagnostics",

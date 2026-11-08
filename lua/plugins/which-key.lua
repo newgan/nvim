@@ -5,6 +5,7 @@ wk.setup({
 })
 
 wk.add({
+    mode = { "n", "x" },
     { "<leader>c", group = "code / compile" },
     { "<leader>d", group = "debug" },
     { "<leader>f", group = "find" },

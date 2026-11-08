@@ -29,7 +29,13 @@ vim.api.nvim_create_autocmd("LspAttach", {
         local opts = { buffer = ev.buf, silent = true }
 
         opts.desc = "Show LSP references"
-        vim.keymap.set("n", "gR", "<cmd>FzfLua lsp_references<CR>", opts)
+        vim.keymap.set("n", "gR", function()
+            require("fzf-lua").lsp_references({
+                async_or_timeout = true,
+                ignore_current_line = true,
+                includeDeclaration = false,
+            })
+        end, opts)
 
         opts.desc = "Go to declaration"
         vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)

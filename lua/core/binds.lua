@@ -40,6 +40,39 @@ vim.keymap.set("n", "<leader>yf", function()
     vim.notify("yanked " .. path)
 end, { desc = "yank file path" })
 
+local function yank_gh(args, cwd)
+    vim.system(vim.list_extend({ "gh" }, args), { text = true, cwd = cwd }, function(r)
+        vim.schedule(function()
+            local url = vim.trim(r.stdout or "")
+            if r.code ~= 0 or url == "" then
+                return vim.notify(vim.trim(r.stderr or "") ~= "" and vim.trim(r.stderr) or "gh failed", vim.log.levels.ERROR)
+            end
+            vim.fn.setreg("+", url)
+            vim.notify("yanked " .. url)
+        end)
+    end)
+end
+
+vim.keymap.set({ "n", "x" }, "<leader>yu", function()
+    local file = vim.api.nvim_buf_get_name(0)
+    local root = vim.fs.root(0, ".git")
+    if file == "" or not root then
+        return vim.notify("not a file in a git repo", vim.log.levels.WARN)
+    end
+    local first, last = vim.fn.line("v"), vim.fn.line(".")
+    if first > last then
+        first, last = last, first
+    end
+    if vim.fn.mode():find("^[vV\22]") then
+        vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+    end
+    local lines = first == last and tostring(first) or first .. "-" .. last
+    yank_gh({ "browse", "-n", "--commit", vim.fs.relpath(root, file) .. ":" .. lines }, root)
+end, { desc = "yank GitHub permalink" })
+vim.keymap.set("n", "<leader>yp", function()
+    yank_gh({ "pr", "view", "--json", "url", "-q", ".url" }, vim.fs.root(0, ".git") or vim.fn.getcwd())
+end, { desc = "yank PR url" })
+
 vim.keymap.set("n", "<leader>tu", function()
     if vim.fn.exists(":Undotree") == 0 then
         vim.cmd.packadd("nvim.undotree")

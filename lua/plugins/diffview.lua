@@ -15,4 +15,8 @@ map("n", "<leader>gM", function() vim.cmd("DiffviewOpen " .. base_ref() .. "...H
     { desc = "diff: working tree vs base" })
 map("n", "<leader>gh", "<cmd>DiffviewFileHistory %<CR>", { desc = "history: current file" })
 map("n", "<leader>gH", "<cmd>DiffviewFileHistory<CR>", { desc = "history: branch" })
+map("n", "<leader>gl", function()
+    vim.cmd("DiffviewFileHistory --range=" .. base_ref() .. "...HEAD --right-only --no-merges")
+end, { desc = "history: branch commits one by one" })
+map("n", "<leader>gW", "<cmd>DiffviewWorktreeOverview<CR>", { desc = "worktree overview" })
 map("n", "<leader>gq", "<cmd>DiffviewClose<CR>", { desc = "close diffview" })
