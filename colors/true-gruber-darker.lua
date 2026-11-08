@@ -1,28 +1,5 @@
-local palette = {
-    fg = "#e4e4ef",
-    fg_1 = "#f4f4ff",
-    fg_2 = "#f5f5f5",
-    fg_3 = "#3a3a3a",
-    white = "#ffffff",
-    black = "#000000",
-    bg_minus_1 = "#101010",
-    bg = "#181818",
-    bg_1 = "#282828",
-    bg_2 = "#453d41",
-    bg_3 = "#484848",
-    bg_4 = "#52494e",
-    red_minus_1 = "#c73c3f",
-    red = "#f43841",
-    red_1 = "#ff4f58",
-    green = "#73c936",
-    yellow = "#ffdd33",
-    brown = "#cc8c3c",
-    quartz = "#95a99f",
-    niagara_2 = "#303540",
-    niagara_1 = "#565f73",
-    niagara = "#96a6c8",
-    wisteria = "#9e95c7",
-}
+package.loaded["true-gruber-darker.palette"] = nil
+local palette = require("true-gruber-darker.palette")
 
 vim.cmd("hi clear")
 if vim.fn.exists("syntax_on") == 1 then
@@ -252,6 +229,7 @@ hl(0, "TreesitterContextBottom", { sp = c.bg_3, underline = true })
 hl(0, "BlinkCmpLabelMatch", { fg = c.yellow })
 hl(0, "BlinkCmpGhostText", { fg = c.bg_4 })
 hl(0, "BlinkCmpLabelDeprecated", { fg = c.bg_4, strikethrough = true })
+hl(0, "BlinkIndentScope", { fg = c.niagara_1 })
 hl(0, "CompileModeError", { fg = c.red })
 hl(0, "CompileModeWarning", { fg = c.yellow })
 hl(0, "CompileModeInfo", { fg = c.niagara })
@@ -319,22 +297,3 @@ vim.g.terminal_color_12 = c.niagara
 vim.g.terminal_color_13 = c.wisteria
 vim.g.terminal_color_14 = c.quartz
 vim.g.terminal_color_15 = c.fg_1
-
-local status_lualine, lualine = pcall(require, "lualine")
-if status_lualine then
-    lualine.setup({
-        options = {
-            theme = {
-                normal = {
-                    a = { bg = c.niagara, fg = c.bg_minus_1 },
-                    b = { bg = c.bg_1, fg = c.fg },
-                    c = { bg = c.bg, fg = c.quartz },
-                },
-                insert = { a = { bg = c.green, fg = c.bg_minus_1 } },
-                visual = { a = { bg = c.yellow, fg = c.bg_minus_1 } },
-                replace = { a = { bg = c.red, fg = c.bg_minus_1 } },
-                command = { a = { bg = c.wisteria, fg = c.bg_minus_1 } },
-            },
-        },
-    })
-end
