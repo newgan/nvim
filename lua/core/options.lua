@@ -58,22 +58,7 @@ vim.cmd.colorscheme("orca-oled")
 
 
 -- clipboard --
-local osc52 = require("vim.ui.clipboard.osc52")
-vim.g.clipboard = {
-    name = "osc52",
-    copy = {
-        ["+"] = osc52.copy("+"),
-        ["*"] = osc52.copy("*"),
-    },
-    paste = {
-        ["+"] = function()
-            return vim.split(vim.fn.getreg('"'), "\n")
-        end,
-        ["*"] = function()
-            return vim.split(vim.fn.getreg('"'), "\n")
-        end,
-    },
-}
+vim.g.clipboard = "pbcopy"
 
 vim.opt.clipboard:append("unnamedplus")
 
