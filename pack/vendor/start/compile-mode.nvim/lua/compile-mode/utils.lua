@@ -24,13 +24,16 @@ local function highlight_locus_jump(bufnr, error)
 		return
 	end
 
+	-- the error may point past the end of a file that has since shrunk; jump_to_file
+	-- clamps the cursor, so clamp the highlight the same way instead of erroring
+	local last_row = vim.api.nvim_buf_line_count(bufnr) - 1
 	local start = {
-		error.row and error.row.value - 1 or 0,
+		math.min(error.row and error.row.value - 1 or 0, last_row),
 		error.col and error.col.value or 1,
 	}
-	local line = vim.api.nvim_buf_get_lines(bufnr, start[1], start[1] + 1, false)[1]
+	local line = vim.api.nvim_buf_get_lines(bufnr, start[1], start[1] + 1, false)[1] or ""
 	local end_ = {
-		error.end_row and error.end_row.value - 1 or start[1],
+		math.min(error.end_row and error.end_row.value - 1 or start[1], last_row),
 		error.end_col and error.end_col.value or line:len(),
 	}
 
@@ -71,6 +74,116 @@ function M.clear_highlights(bufnr)
 	vim.api.nvim_buf_clear_namespace(bufnr, compile_mode_ns, 0, -1)
 end
 
+---Find the `\(` of the `group`-th capturing group in a magic-mode Vim pattern and the
+---end of that group including any multi (`*`, `\+`, `\?`, `\=`, `\{..}`, `\@..`)
+---that follows its `\)`. Non-capturing `\%(` groups and `[...]` collections are
+---skipped. Returns nil when the pattern cannot be walked.
+---@param pattern string
+---@param group integer
+---@return integer|nil open byte index of the `\` in `\(`
+---@return integer|nil after byte index just past the group and its multi
+local function find_group(pattern, group)
+	local i, n = 1, #pattern
+	local stack = {} ---@type boolean[] true when the open paren is the wanted group
+	local count = 0
+	local open_at = nil
+	while i <= n do
+		local c = pattern:sub(i, i)
+		if c == "\\" then
+			local nxt = pattern:sub(i + 1, i + 1)
+			if nxt == "(" then
+				count = count + 1
+				table.insert(stack, count == group)
+				if count == group then
+					open_at = i
+				end
+				i = i + 2
+			elseif (nxt == "%" or nxt == "z") and pattern:sub(i + 2, i + 2) == "(" then
+				table.insert(stack, false)
+				i = i + 3
+			elseif nxt == ")" then
+				local wanted = table.remove(stack)
+				if wanted == nil then
+					return nil
+				end
+				i = i + 2
+				if wanted then
+					local rest = pattern:sub(i)
+					local multi = rest:match("^\\[+?=]")
+						or rest:match("^%*")
+						or rest:match("^\\{[^}]*}")
+						or rest:match("^\\@%d*<?[=!>]")
+					return open_at, i + (multi and #multi or 0)
+				end
+			else
+				i = i + 2
+			end
+		elseif c == "[" then
+			-- collection: find the closing `]`; a `]` right after `[` or `[^` is literal,
+			-- and `\]` inside is escaped. An unterminated `[` is a literal `[`.
+			local j = i + 1
+			if pattern:sub(j, j) == "^" then
+				j = j + 1
+			end
+			if pattern:sub(j, j) == "]" then
+				j = j + 1
+			end
+			while j <= n and pattern:sub(j, j) ~= "]" do
+				j = j + (pattern:sub(j, j) == "\\" and 2 or 1)
+			end
+			i = j <= n and j + 1 or i + 1
+		else
+			i = i + 1
+		end
+	end
+	return nil
+end
+
+---Cache of per-group regexes: pattern -> group -> vim.regex|false
+---@type table<string, table<integer, vim.regex|false>>
+local group_rx_cache = {}
+
+---Exact position of a capture group, found by re-matching the pattern with `\zs` and
+---`\ze` wrapped around that group. Returns nil when that is not possible or when the
+---result does not reproduce the captured text (e.g. a group inside a repetition).
+---@param pattern string
+---@param group integer
+---@param input string
+---@param capture string
+---@return CompileModeRange|nil
+local function group_range(pattern, group, input, capture)
+	local cache = group_rx_cache[pattern]
+	if not cache then
+		cache = {}
+		group_rx_cache[pattern] = cache
+	end
+	local rx = cache[group]
+	if rx == nil then
+		rx = false
+		local open, after = find_group(pattern, group)
+		if open then
+			local wrapped = pattern:sub(1, open - 1)
+				.. "\\zs"
+				.. pattern:sub(open, after - 1)
+				.. "\\ze"
+				.. pattern:sub(after)
+			local ok, compiled = pcall(vim.regex, wrapped)
+			if ok then
+				rx = compiled
+			end
+		end
+		cache[group] = rx
+	end
+	if not rx then
+		return nil
+	end
+	local s, e = rx:match_str(input)
+	if not s or input:sub(s + 1, e) ~= capture then
+		return nil
+	end
+	return { start = s + 1, end_ = e }
+end
+
 ---@param input string
 ---@param pattern string
 ---@param compiled_rx vim.regex|nil
@@ -88,33 +201,108 @@ function M.matchlistpos(input, pattern, compiled_rx)
 		return result
 	end
 
+	-- the whole match is known exactly
 	local seg_start = s0 + 1
+	result[1] = { start = seg_start, end_ = e0 }
 	local seg = string.sub(input, seg_start, e0)
 
+	-- groups: exact positions via `\zs`/`\ze` when possible; otherwise fall back to
+	-- locating the captured text, searching forward from the previous group
 	local cursor = 1
-
-	for i, capture in ipairs(list) do
+	for i = 2, #list do
+		local capture = list[i]
 		if capture ~= "" then
-			local s, e = string.find(seg, capture, cursor, true)
-			if not s then
-				s, e = string.find(seg, capture, 1, true)
-			end
-			if s and e then
-				local abs_s = seg_start + s - 1
-				local abs_e = seg_start + e - 1
-				result[i] = { start = abs_s, end_ = abs_e }
-				if i ~= 1 then
-					cursor = e + 1
+			local range = group_range(pattern, i - 1, input, capture)
+			if not range then
+				local s, e = string.find(seg, capture, cursor, true)
+				if not s then
+					s, e = string.find(seg, capture, 1, true)
 				end
-			else
-				result[i] = nil
+				if s and e then
+					range = { start = seg_start + s - 1, end_ = seg_start + e - 1 }
+				end
 			end
-		else
-			result[i] = nil
+			if range then
+				result[i] = range
+				cursor = range.end_ - seg_start + 2
+			end
 		end
 	end
 
 	return result
+end
+
+---Fill in the configured `window` defaults for the compilation window where the command
+---gave no modifier or count of its own.
+---@param smods SMods|nil
+---@param count integer|nil
+---@return SMods smods
+---@return integer|nil count
+function M.apply_window_defaults(smods, count)
+	local window = require("compile-mode.config.internal").window
+	smods = vim.deepcopy(smods or {})
+	if (smods.split or "") == "" then
+		smods.split = window.split
+	end
+	if not smods.vertical then
+		smods.vertical = window.vertical
+	end
+	-- the configured size is lines for a horizontal window and columns for a vertical
+	-- one, so it only makes sense when the orientation is the configured one
+	if (not count or count == 0) and (smods.vertical or false) == (window.vertical or false) then
+		count = window.size
+	end
+	if count == 0 then
+		count = nil
+	end
+	return smods, count
+end
+
+---The loaded buffer whose name is exactly `path` (normalised), if any. Unlike
+---|bufnr()|, this never falls back to pattern matching.
+---@param path string
+---@return integer|nil
+function M.find_loaded_buffer(path)
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) and vim.fs.normalize(vim.api.nvim_buf_get_name(bufnr)) == path then
+			return bufnr
+		end
+	end
+	return nil
+end
+
+---@param bufnr integer
+---@param diagnostics vim.Diagnostic[]
+function M.set_diagnostics(bufnr, diagnostics)
+	vim.diagnostic.set(compile_mode_ns, bufnr, diagnostics, {})
+end
+
+---Windows showing `bufnr` whose cursor sits on its last line: the ones that should keep
+---following output as it is appended. Windows scrolled up to read earlier output are
+---left alone, as Emacs does.
+---@param bufnr integer
+---@return integer[] win_ids
+function M.windows_at_end(bufnr)
+	local last = vim.api.nvim_buf_line_count(bufnr)
+	local wins = {}
+	for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
+		if vim.api.nvim_win_get_cursor(win)[1] >= last then
+			table.insert(wins, win)
+		end
+	end
+	return wins
+end
+
+---Move the given windows to the last line of `bufnr`.
+---@param bufnr integer
+---@param win_ids integer[]
+function M.scroll_to_end(bufnr, win_ids)
+	local last = vim.api.nvim_buf_line_count(bufnr)
+	for _, win in ipairs(win_ids) do
+		if vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_win_set_cursor(win, { last, 0 })
+		end
+	end
 end
 
 ---@type fun(opts: table): string
@@ -192,7 +380,9 @@ local function jump_to_file(filename, error, smods)
 			end)
 		end
 	else
-		compilation_buffer = M.split_unless_open({ bufnr = compilation_buffer, fname = config.buffer_name }, smods, 0)
+		local wsmods, wcount = M.apply_window_defaults(smods, 0)
+		compilation_buffer =
+			M.split_unless_open({ bufnr = compilation_buffer, fname = config.buffer_name }, wsmods, wcount)
 		local compilation_win_id = vim.fn.win_findbuf(compilation_buffer)[1]
 
 		vim.api.nvim_win_set_cursor(compilation_win_id, { error.linenum, 0 })

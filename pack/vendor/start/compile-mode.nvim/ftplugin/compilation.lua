@@ -86,6 +86,8 @@ set("n", "<C-g>[", "<cmd>CompilePrevFile<cr>")
 set("n", "gf", compile_mode._gf)
 set("n", "<C-w>f", compile_mode._CTRL_W_f)
 set("n", "<C-g>f", "<cmd>NextErrorFollow<cr>")
+-- the buffer is read-only, so `i` is free: send a line to the running process
+set("n", "i", "<cmd>CompileInput<cr>")
 
 autocmd("CursorMoved", {
 	desc = "Next Error Follow",

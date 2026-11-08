@@ -58,6 +58,42 @@ M.dir_changes = {}
 local in_next_error_mode = false
 local has_auto_jumped = false
 
+---Most recent header line seen while parsing (e.g. rustc's `error[E0308]: ...`); gives its
+---level to the location-only lines that follow it (matchers with `level_from_previous`).
+---@type { level: CompileModeLevel, linenum: integer }|nil
+local last_header = nil
+---How many lines a location-only line may trail its header by and still inherit its level.
+local HEADER_DISTANCE = 3
+
+---Id of this run's "Compilation" quickfix list, nil until pushed (see `live_quickfix`).
+---@type integer|nil
+local qf_id = nil
+
+---Pending live quickfix/diagnostics sync (see `request_live_sync`).
+---@type uv.uv_timer_t|nil
+local sync_timer = nil
+---Milliseconds between live quickfix/diagnostics syncs while output arrives.
+local SYNC_INTERVAL = 200
+
+---Diagnostics for files that were not loaded when computed, keyed by absolute path and
+---applied when the file is read (see `live_diagnostics`).
+---@type table<string, CompileModeError[]>
+local pending_diagnostics = {}
+local diagnostics_autocmd_registered = false
+
+---The command of the run in progress (or the last run), for events.
+---@type string|nil
+local current_command = nil
+
+---Last command per directory (see `remember_commands`): the JSON file `history_file`
+---holds a list of {dir, command}, newest first. It is re-read on every use so that
+---several Nvim instances do not overwrite each other's entries.
+local HISTORY_LIMIT = 50
+---What this plugin itself last stored in vim.g.compile_command, to tell apart a value the
+---user set explicitly (for example from a project-local .nvim.lua).
+---@type string|nil
+local plugin_set_command = nil
+
 --- UTILITY FUNCTIONS
 
 ---@param bufnr integer
@@ -71,6 +107,9 @@ local function set_lines(bufnr, start, end_, data, trim)
 	if vim.fn.bufexists(bufnr) == 0 then
 		return 0
 	end
+
+	-- follow the output only in windows already at the end (see utils.windows_at_end)
+	local following = config.auto_scroll and utils.windows_at_end(bufnr) or {}
 
 	utils.buf_set_opt(bufnr, "modifiable", true)
 	vim.api.nvim_buf_set_lines(bufnr, start, end_, false, data)
@@ -92,11 +131,7 @@ local function set_lines(bufnr, start, end_, data, trim)
 		utils.buf_set_opt(bufnr, "modified", false)
 	end)
 
-	if config.auto_scroll then
-		vim.api.nvim_buf_call(bufnr, function()
-			vim.cmd("normal G")
-		end)
-	end
+	utils.scroll_to_end(bufnr, following)
 
 	return removed_lines
 end
@@ -191,6 +226,62 @@ local function goto_file(same_window)
 	end
 end
 
+---Normalised absolute form of a directory, the key used in the history file.
+---@param dir string
+---@return string
+local function history_key(dir)
+	local abs = vim.fs.normalize(vim.fn.fnamemodify(dir, ":p"))
+	return (abs:gsub("(.)/$", "%1"))
+end
+
+---@return { dir: string, command: string }[]
+local function load_history()
+	local config = require("compile-mode.config.internal")
+	local ok, lines = pcall(vim.fn.readfile, config.history_file)
+	if ok and #lines > 0 then
+		local decoded_ok, decoded = pcall(vim.json.decode, table.concat(lines, "\n"))
+		if decoded_ok and type(decoded) == "table" then
+			return decoded
+		end
+	end
+	return {}
+end
+
+---The last command compiled from `dir`, if any.
+---@param dir string
+---@return string|nil
+local function remembered_command(dir)
+	local key = history_key(dir)
+	for _, entry in ipairs(load_history()) do
+		if entry.dir == key then
+			return entry.command
+		end
+	end
+	return nil
+end
+
+---@param dir string
+---@param command string
+local function remember_command(dir, command)
+	local key = history_key(dir)
+	local list = load_history()
+	for i = #list, 1, -1 do
+		if list[i].dir == key then
+			table.remove(list, i)
+		end
+	end
+	table.insert(list, 1, { dir = key, command = command })
+	while #list > HISTORY_LIMIT do
+		table.remove(list)
+	end
+	local config = require("compile-mode.config.internal")
+	vim.fn.mkdir(vim.fs.dirname(config.history_file), "p")
+	local ok, err = pcall(vim.fn.writefile, { vim.json.encode(list) }, config.history_file)
+	if not ok then
+		log.fmt_warn("could not write %s: %s", config.history_file, err)
+	end
+end
+
 ---@type fun(cmd: string, bufnr: integer, param: CommandParam): integer, integer, integer, boolean
 local runjob = a.wrap(
 	---@param cmd string
@@ -203,30 +294,38 @@ local runjob = a.wrap(
 		log.debug("calling runjob()")
 
 		local count = 0
+		---Raw text of the buffer's last line, which the next read may continue.
 		local partial_line = ""
 		local is_exited = false
 		local line_limit_exceeded = false
 		local job_id
 
-		local on_either = a.void(function(_, data)
-			if is_exited or not data or #data < 1 or (#data == 1 and data[1] == "") then
+		---Raw output lines not written to the buffer yet; the last one is the partial line.
+		---@type string[]
+		local pending = {}
+		---@type uv.uv_timer_t|nil
+		local flush_timer = nil
+		---Flushes in progress (a flush yields once between writing and parsing).
+		local flushing = 0
+
+		---Write everything pending in one go and parse it. Output arrives in many small
+		---reads; batching them bounds redraws and parsing to one per `flush_interval`.
+		---Must run inside a coroutine (see `utils.wait`).
+		local function flush_pending()
+			flush_timer = nil
+			if #pending == 0 or vim.fn.bufexists(bufnr) == 0 then
 				return
 			end
+			local new_lines = pending
+			pending = {}
 
+			flushing = flushing + 1
+			local ok, err = pcall(function()
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
-
-			count = count + #data
-
-			local new_lines = { partial_line .. (data[1]:gsub("\n", "")) }
-			for i = 2, #data do
-				table.insert(new_lines, (data[i]:gsub("\n", "")))
-			end
-			partial_line = new_lines[#new_lines]
 
 			for i, line in ipairs(new_lines) do
 				for _, re in ipairs(config.hidden_output) do
 					line = vim.fn.substitute(line, re, "", "")
-					new_lines[i] = line
 				end
 
 				while vim.endswith(line, "\r") do
@@ -263,6 +362,61 @@ local runjob = a.wrap(
 			if line_limit_exceeded then
 				vim.fn.jobstop(job_id)
 			end
+			end)
+			flushing = flushing - 1
+			if not ok then
+				log.fmt_error("writing output failed: %s", err)
+			end
+		end
+		local flush = a.void(flush_pending)
+
+		local function schedule_flush()
+			if config.flush_interval <= 0 then
+				flush()
+				return
+			end
+			if not flush_timer then
+				flush_timer = vim.defer_fn(flush, config.flush_interval)
+			end
+		end
+
+		local function on_either(_, data)
+			if is_exited or not data or #data < 1 or (#data == 1 and data[1] == "") then
+				return
+			end
+
+			count = count + #data
+
+			-- data[1] continues the partial line; the rest are new lines
+			local first = (data[1]:gsub("\n", ""))
+			if #pending == 0 then
+				pending[1] = partial_line .. first
+			else
+				pending[#pending] = pending[#pending] .. first
+			end
+			for i = 2, #data do
+				table.insert(pending, (data[i]:gsub("\n", "")))
+			end
+			partial_line = pending[#pending]
+
+			schedule_flush()
+		end
+
+		local finish = a.void(function(id, code)
+			is_exited = true
+			if flush_timer and not flush_timer:is_closing() then
+				flush_timer:stop()
+				flush_timer:close()
+			end
+			flush_timer = nil
+			-- a timer flush may be between its write and its parse: let it finish first,
+			-- then write whatever is still pending, so the run completes with everything parsed
+			while flushing > 0 do
+				utils.wait()
+			end
+			flush_pending()
+			local effective_code = line_limit_exceeded and exit_code.SIGTERM or code
+			callback(count, effective_code, id, line_limit_exceeded)
 		end)
 
 		log.debug("starting job...")
@@ -270,11 +424,7 @@ local runjob = a.wrap(
 			cwd = compilation_directory,
 			on_stdout = on_either,
 			on_stderr = on_either,
-			on_exit = function(id, code)
-				is_exited = true
-				local effective_code = line_limit_exceeded and exit_code.SIGTERM or code
-				callback(count, effective_code, id, line_limit_exceeded)
-			end,
+			on_exit = finish,
 			pty = config.use_pseudo_terminal,
 			env = config.environment,
 			clear_env = config.clear_environment,
@@ -289,12 +439,31 @@ local runjob = a.wrap(
 		vim.g.compile_job_id = job_id
 		vim.cmd.redrawstatus()
 
+		-- only a command that actually started is worth remembering
+		if config.remember_commands then
+			remember_command(compilation_directory or vim.fn.getcwd(), cmd)
+		end
+
+		vim.api.nvim_exec_autocmds("User", {
+			pattern = "CompilationStarted",
+			data = {
+				command = cmd,
+				bufnr = bufnr,
+				job_id = job_id,
+				directory = compilation_directory or vim.fn.getcwd(),
+			},
+		})
+
 		if param.bang then
 			log.debug("sync mode - waiting for job to finish...")
 			vim.fn.jobwait({ job_id })
 		end
 
+		-- one handler per buffer: without clearing, every (re)compile stacked another one
+		local group = vim.api.nvim_create_augroup("compile-mode.nvim/job", { clear = false })
+		vim.api.nvim_clear_autocmds({ group = group, buffer = bufnr, event = "BufDelete" })
 		vim.api.nvim_create_autocmd({ "BufDelete" }, {
+			group = group,
 			buffer = bufnr,
 			callback = function()
 				vim.g.compilation_exit_code = nil
@@ -337,6 +506,11 @@ local runcommand = a.void(
 		errors.error_list = {}
 		M.dir_changes = {}
 		has_auto_jumped = false
+		last_header = nil
+		qf_id = nil
+		pending_diagnostics = {}
+		current_command = command
+		M._cancel_live_sync()
 		utils.clear_diagnostics()
 
 		if vim.g.compile_job_id then
@@ -364,10 +538,11 @@ local runcommand = a.void(
 		log.debug("opening compilation buffer...")
 
 		local prev_win = vim.api.nvim_get_current_win()
+		local wsmods, wcount = utils.apply_window_defaults(param.smods, param.count)
 		local bufnr = utils.split_unless_open(
 			{ fname = config.buffer_name },
-			vim.tbl_extend("force", param.smods or {}, { noswapfile = true }),
-			param.count
+			vim.tbl_extend("force", wsmods, { noswapfile = true }),
+			wcount
 		)
 		utils.wait()
 
@@ -444,8 +619,21 @@ local runcommand = a.void(
 		}, false)
 
 		if not param.smods or not param.smods.silent then
-			vim.notify(compilation_message)
+			local level = vim.log.levels.INFO
+			if line_limit_exceeded or code == exit_code.SIGTERM then
+				level = vim.log.levels.WARN
+			elseif code ~= exit_code.SUCCESS then
+				level = vim.log.levels.ERROR
+			end
+			local counts = M.statusline_info().counts
+			vim.notify(
+				("%s: %d errors, %d warnings, %.1f s"):format(compilation_message, counts.error, counts.warning, elapsed),
+				level
+			)
 		end
+
+		M._cancel_live_sync()
+		M._live_sync()
 
 		vim.api.nvim_exec_autocmds("User", {
 			pattern = "CompilationFinished",
@@ -453,6 +641,9 @@ local runcommand = a.void(
 				command = command,
 				code = code,
 				bufnr = bufnr,
+				elapsed = elapsed,
+				directory = compilation_directory or vim.fn.getcwd(),
+				counts = M.statusline_info().counts,
 			},
 		})
 
@@ -650,8 +841,16 @@ M.compile = a.void(
 
 			local buf = vim.api.nvim_get_current_buf()
 			local ft = vim.bo[buf].filetype
-			---@type string
-			local default_cmd = vim.g.compile_command
+			---@type string|nil
+			local default_cmd
+			if not config.remember_commands then
+				default_cmd = vim.g.compile_command
+			elseif vim.g.compile_command and vim.g.compile_command ~= plugin_set_command then
+				-- set explicitly by the user, not by this plugin after a run
+				default_cmd = vim.g.compile_command
+			else
+				default_cmd = remembered_command(vim.g.compilation_directory or vim.fn.getcwd())
+			end
 			if not default_cmd then
 				if type(config.default_command) == "table" then
 					default_cmd = config.default_command[ft] or config.default_command["*"] or ""
@@ -674,6 +873,7 @@ M.compile = a.void(
 		end
 
 		vim.g.compile_command = command
+		plugin_set_command = command
 		compilation_directory = vim.g.compilation_directory or vim.fn.getcwd()
 
 		runcommand(command, param)
@@ -693,7 +893,16 @@ M.recompile = a.void(
 
 		param = param or {}
 
-		if vim.g.compile_command then
+		local cwd = vim.g.compilation_directory or vim.fn.getcwd()
+		-- a vim.g.compile_command the user set explicitly beats the directory's history,
+		-- as it does for the :Compile prompt
+		local explicit = vim.g.compile_command ~= nil and vim.g.compile_command ~= plugin_set_command
+		local remembered = (config.remember_commands and not explicit) and remembered_command(cwd) or nil
+		if remembered then
+			-- this directory has its own last command: rerun that one here
+			compilation_directory = cwd
+			runcommand(remembered, param)
+		elseif vim.g.compile_command then
 			runcommand(vim.g.compile_command, param)
 		elseif config.recompile_no_fail then
 			M.compile(param)
@@ -887,6 +1096,7 @@ M.interrupt = a.void(function()
 		data = {
 			job_id = job_id,
 			bufnr = bufnr,
+			command = current_command,
 		},
 	})
 end)
@@ -926,6 +1136,234 @@ M.move_to_prev_file = act_from_current_error("move", "prev", true)
 
 -- OUTWARD-FACING UTILITIES
 
+---Absolute path of an error's file, honouring directory-change messages.
+---@param linenum integer
+---@param error CompileModeError
+---@return string
+local function error_path(linenum, error)
+	local filename = error.filename.value
+	if not utils.is_absolute(filename) then
+		filename = find_directory_for_line(linenum) .. "/" .. filename
+	end
+	return vim.fs.normalize(filename)
+end
+
+---@class CompileModeErrorItem
+---@field linenum integer line of the compilation buffer the error is on
+---@field filename string absolute path
+---@field lnum integer|nil
+---@field end_lnum integer|nil
+---@field col integer|nil
+---@field end_col integer|nil
+---@field text string
+---@field type "E"|"W"|"I"
+
+---The current errors at or above `error_threshold`, in buffer order, with absolute paths.
+---The order matches |:FirstError| counts, so item N is reachable with `first_error({ count = N })`.
+---@return CompileModeErrorItem[]
+function M.error_items()
+	local config = require("compile-mode.config.internal")
+	local type_for = { [errors.level.ERROR] = "E", [errors.level.WARNING] = "W", [errors.level.INFO] = "I" }
+
+	local lines = vim.tbl_keys(errors.error_list)
+	table.sort(lines)
+	local items = {}
+	for _, linenum in ipairs(lines) do
+		local error = errors.error_list[linenum]
+		if error.level >= config.error_threshold then
+			table.insert(items, {
+				linenum = linenum,
+				filename = error_path(linenum, error),
+				lnum = error.row and error.row.value,
+				end_lnum = error.end_row and error.end_row.value,
+				col = error.col and error.col.value,
+				end_col = error.end_col and error.end_col.value,
+				text = error.full_text,
+				type = type_for[error.level],
+			})
+		end
+	end
+	return items
+end
+
+---Replace this run's "Compilation" quickfix list with the current errors, pushing a new
+---list the first time so other quickfix lists stay on the stack. The list is addressed by
+---id, so it is found even after |:QuickfixErrors| retitled it or |:colder| moved away.
+function M._update_quickfix()
+	local items = M.error_items()
+	if #items == 0 and not qf_id then
+		return
+	end
+	local what = { title = "Compilation", items = items }
+	if qf_id and vim.fn.setqflist({}, "r", vim.tbl_extend("force", what, { id = qf_id })) == 0 then
+		return
+	end
+	-- first push of this run, or the list was dropped off the stack
+	vim.fn.setqflist({}, " ", what)
+	qf_id = vim.fn.getqflist({ id = 0 }).id
+end
+
+local function ensure_diagnostics_autocmd()
+	if diagnostics_autocmd_registered then
+		return
+	end
+	diagnostics_autocmd_registered = true
+	vim.api.nvim_create_autocmd("BufReadPost", {
+		group = vim.api.nvim_create_augroup("compile-mode.nvim/diagnostics", { clear = true }),
+		desc = "Apply compile-mode diagnostics to a file opened after its errors arrived",
+		callback = function(ev)
+			local path = vim.fs.normalize(vim.api.nvim_buf_get_name(ev.buf))
+			local errs = pending_diagnostics[path]
+			if errs then
+				pending_diagnostics[path] = nil
+				utils.set_diagnostics(
+					ev.buf,
+					vim.tbl_map(function(error)
+						return errors.map_to_diagnostic(ev.buf, error)
+					end, errs)
+				)
+			end
+		end,
+	})
+end
+
+---Publish the current errors as diagnostics in the buffers they belong to. Files that are
+---not loaded yet get theirs when they are read.
+function M._update_diagnostics()
+	local by_path = {}
+	for linenum, error in pairs(errors.error_list) do
+		if error.row then
+			local path = error_path(linenum, error)
+			by_path[path] = by_path[path] or {}
+			table.insert(by_path[path], error)
+		end
+	end
+
+	pending_diagnostics = {}
+	for path, errs in pairs(by_path) do
+		local bufnr = utils.find_loaded_buffer(path)
+		if bufnr then
+			utils.set_diagnostics(
+				bufnr,
+				vim.tbl_map(function(error)
+					return errors.map_to_diagnostic(bufnr, error)
+				end, errs)
+			)
+		else
+			pending_diagnostics[path] = errs
+		end
+	end
+	ensure_diagnostics_autocmd()
+end
+
+---Push the current errors to quickfix and diagnostics, whichever are enabled.
+function M._live_sync()
+	local config = require("compile-mode.config.internal")
+	if config.live_quickfix then
+		M._update_quickfix()
+	end
+	if config.live_diagnostics then
+		M._update_diagnostics()
+	end
+end
+
+function M._cancel_live_sync()
+	if sync_timer and not sync_timer:is_closing() then
+		sync_timer:stop()
+		sync_timer:close()
+	end
+	sync_timer = nil
+end
+
+---Sync at most once per SYNC_INTERVAL while output streams in; each sync rebuilds the
+---whole list, so doing it per flush would be quadratic in the number of errors.
+local function request_live_sync()
+	local config = require("compile-mode.config.internal")
+	if not (config.live_quickfix or config.live_diagnostics) or sync_timer then
+		return
+	end
+	sync_timer = vim.defer_fn(function()
+		sync_timer = nil
+		M._live_sync()
+	end, SYNC_INTERVAL)
+end
+
+---Open the compilation window if it is not visible in this tabpage, close it otherwise.
+---@param param CommandParam?
+function M.toggle_window(param)
+	param = param or {}
+	local config = require("compile-mode.config.internal")
+
+	local bufnr = vim.g.compilation_buffer
+	if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+		vim.notify("No compilation buffer yet; run :Compile first")
+		return
+	end
+
+	local tab = vim.api.nvim_get_current_tabpage()
+	local wins = vim.tbl_filter(function(win)
+		return vim.api.nvim_win_get_tabpage(win) == tab
+	end, vim.fn.win_findbuf(bufnr))
+
+	if #wins > 0 then
+		if #vim.api.nvim_list_wins() == 1 then
+			M.close_buffer()
+		else
+			for _, win in ipairs(wins) do
+				vim.api.nvim_win_close(win, true)
+			end
+		end
+		return
+	end
+
+	local prev_win = vim.api.nvim_get_current_win()
+	local smods, count = utils.apply_window_defaults(param.smods, param.count)
+	utils.split_unless_open({ bufnr = bufnr }, smods, count)
+	if not config.focus_compilation_buffer then
+		vim.api.nvim_set_current_win(prev_win)
+	end
+end
+
+---Send a line of text to the running compilation's stdin; prompts when none is given.
+---@type fun(param: CommandParam?)
+M.send_input = a.void(function(param)
+	param = param or {}
+
+	local job_id = vim.g.compile_job_id
+	if not job_id then
+		vim.notify("No compilation running", vim.log.levels.WARN)
+		return
+	end
+
+	local text = param.args
+	if not text or text == "" then
+		text = utils.input({ prompt = "Input: " })
+	end
+	if text == nil then
+		return
+	end
+
+	vim.fn.chansend(job_id, text .. "\n")
+end)
+
+---Close the running compilation's stdin, like CTRL-D in a terminal.
+function M.send_eof()
+	local config = require("compile-mode.config.internal")
+
+	local job_id = vim.g.compile_job_id
+	if not job_id then
+		vim.notify("No compilation running", vim.log.levels.WARN)
+		return
+	end
+
+	if config.use_pseudo_terminal then
+		-- a pty has no separate stdin to close; the EOT byte is what CTRL-D sends
+		vim.fn.chansend(job_id, "\4")
+	else
+		vim.fn.chanclose(job_id, "stdin")
+	end
+end
+
 M._gf = goto_file(false)
 
 M._CTRL_W_f = goto_file(true)
@@ -935,15 +1373,39 @@ M._parse_errors = a.void(function(bufnr, start_line, end_line)
 	local config = require("compile-mode.config.internal")
 
 	local output_highlights = {}
+	---@type integer[]
+	local new_errors = {}
+
+	-- a parse from the top (ftplugin re-parse of another buffer) must not inherit a header
+	-- seen in the main buffer
+	if start_line == 0 then
+		last_header = nil
+	end
 
 	local lines = vim.api.nvim_buf_get_lines(bufnr, start_line, end_line, false)
 	for linenum, line in ipairs(lines) do
 		linenum = start_line + linenum
 
-		local error = errors.parse(line, linenum)
+		-- very long lines (nvcc and linker command lines) are plain output: every matcher
+		-- would cost milliseconds on them and none would match
+		local too_long = config.max_line_length and #line > config.max_line_length
+		local error = not too_long and errors.parse(line, linenum) or nil
 
 		if error then
+			-- location-only lines (rustc's "  --> file:line:col") take the level of the
+			-- header line just above them
+			local matcher = config.error_regexp_table[error.group]
+			if
+				matcher
+				and matcher.level_from_previous
+				and last_header
+				and linenum - last_header.linenum <= HEADER_DISTANCE
+			then
+				error.level = last_header.level
+			end
+
 			errors.error_list[linenum] = error
+			table.insert(new_errors, linenum)
 
 			if config.auto_jump_to_first_error and not has_auto_jumped then
 				has_auto_jumped = true
@@ -951,7 +1413,14 @@ M._parse_errors = a.void(function(bufnr, start_line, end_line)
 				utils.jump_to_error(error, dir, {})
 				error_cursor = linenum
 			end
-		else
+		elseif not too_long then
+			for _, header in ipairs(config.error_level_headers) do
+				if header._rx and header._rx:match_str(line) then
+					last_header = { level = header.level, linenum = linenum }
+					break
+				end
+			end
+
 			---@type CompileModeDirectoryMatcher
 			local matcher = vim.iter(config.directory_change_matchers):find(function(matcher)
 				local s0 = matcher._rx:match_str(line)
@@ -985,8 +1454,15 @@ M._parse_errors = a.void(function(bufnr, start_line, end_line)
 		end
 	end
 
-	errors.highlight(bufnr)
+	for _, linenum in ipairs(new_errors) do
+		errors.highlight_error(bufnr, errors.error_list[linenum], linenum)
+	end
 	utils.highlight_command_outputs(bufnr, output_highlights)
+
+	if #new_errors > 0 then
+		request_live_sync()
+	end
+
 	vim.cmd.redrawstatus()
 end)
 

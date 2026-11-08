@@ -36,6 +36,14 @@ Table of Contents                             *compile-mode-table-of-contents*
   - auto_scroll                                     |compile-mode.auto_scroll|
   - debug                                                 |compile-mode.debug|
   - use_pseudo_terminal                     |compile-mode.use_pseudo_terminal|
+  - max_line_length                             |compile-mode.max_line_length|
+  - error_level_headers                     |compile-mode.error_level_headers|
+  - live_quickfix                                 |compile-mode.live_quickfix|
+  - live_diagnostics                           |compile-mode.live_diagnostics|
+  - flush_interval                               |compile-mode.flush_interval|
+  - window                                               |compile-mode.window|
+  - remember_commands                         |compile-mode.remember_commands|
+  - history_file                                   |compile-mode.history_file|
   - ansi_osc                                   |compile-mode.ansi_osc|
 6. API                                                      |compile-mode-api|
   - compile()                                         |compile-mode.compile()|
@@ -430,6 +438,10 @@ ansi_color                                         *compile-mode.ansi_color*
     baleia_options (table, optional) ~
         Options to pass to `baleia.setup()` when `kind` is `"render"`.
         Use `{}` for baleia's defaults, or a table of baleia options.
+        One default differs from baleia's own: `async` is `false`, because
+        output is handed to baleia in small batches as it arrives, so the
+        colours are in place when the batch is parsed. Pass `async = true`
+        to get baleia's timer-based highlighting back.
 
     Example: >lua
         vim.g.compile_mode = {
@@ -628,6 +640,81 @@ use_pseudo_terminal                         *compile-mode.use_pseudo_terminal*
     This is useful when the program doesn't automatically flush the buffer so
     that the output cannot be displayed at realtime.
 
+max_line_length                               *compile-mode.max_line_length*
+    Lines longer than this many bytes are shown but not parsed for errors,
+    directory changes or headers. Compiler and linker command lines can run
+    to tens of kilobytes, and every regex in the table would be tried on
+    them for nothing. Set to `false` to parse every line. Compare Emacs's
+    `compilation-max-output-line-length`.
+
+    Default: `4000`
+
+error_level_headers                       *compile-mode.error_level_headers*
+    A list of `{ regex, level }` tables describing "header" lines that carry
+    a level but no location, such as rustc's `error[E0308]: mismatched types`.
+    A matcher in |compile-mode.error_regexp_table| with
+    `level_from_previous = true` takes its level from the closest header
+    within the three lines above it, which is how two-line formats like >
+
+        warning: unused variable: `x`
+          --> src/main.rs:10:9
+<
+    get the right level. Entries given here are tried before the built-in
+    ones, which cover rustc's `error`, `warning`, `note` and `help` headers.
+
+    Default: `{}`
+
+live_quickfix                                   *compile-mode.live_quickfix*
+    When `true`, a quickfix list titled "Compilation" is pushed when the
+    first error of a run arrives and replaced as further errors arrive, so
+    |:cnext|, |]q| and quickfix-based plugins follow a compilation as it
+    runs. Other quickfix lists stay on the stack (see |:colder|).
+
+    Default: `false`
+
+live_diagnostics                             *compile-mode.live_diagnostics*
+    When `true`, errors are published as |vim.diagnostic| entries in the
+    buffers they belong to as they arrive, without closing the compilation
+    window. Files that are not loaded yet receive theirs when they are read.
+    See |compile-mode.use_diagnostics| for the older mode that replaces the
+    compilation window with diagnostics.
+
+    Default: `false`
+
+flush_interval                                 *compile-mode.flush_interval*
+    Milliseconds of output to batch before writing it to the compilation
+    buffer and parsing it. Output arrives in many small reads; batching keeps
+    redraws and parsing to one per interval. `0` writes every read at once.
+
+    Default: `30`
+
+window                                                 *compile-mode.window*
+    Default placement of the compilation window, used when the command gave
+    no modifier or count of its own: >lua
+
+        window = {
+            split = "botright", -- see |:command-modifiers|, "" for none
+            vertical = false,
+            size = 15,          -- lines (or columns when vertical)
+        }
+<
+    Default: `{ split = "", vertical = false, size = nil }`
+
+remember_commands                         *compile-mode.remember_commands*
+    When `true`, the last command is remembered per directory and kept across
+    sessions in |compile-mode.history_file|. The |:Compile| prompt then
+    defaults to the directory's own last command, and |:Recompile| reruns it,
+    so switching between projects or worktrees does not rerun the other
+    project's command. A `vim.g.compile_command` set explicitly (for example
+    from a project-local |exrc| file) still wins.
+
+    Default: `false`
+
+history_file                                     *compile-mode.history_file*
+    Where |compile-mode.remember_commands| keeps its history.
+
+    Default: `stdpath("state") .. "/compile-mode/history.json"`
+
 ansi_osc                                         *compile-mode.ansi_osc*
     A table controlling how OSC (Operating System Command) sequences are
     handled in compilation output. It has two fields:
@@ -748,6 +835,13 @@ prev_error({param})                                *compile-mode.prev_error()*
         • {smods} (`table`) see |:command-modifiers| for more; this will
           affect the way windows are created when jumping to errors, if
           there's a need to open a new window
+
+error_items()                                     *compile-mode.error_items()*
+    Returns the current errors at or above |compile-mode.error_threshold|, in
+    compilation buffer order, as tables with `linenum`, an absolute `filename`,
+    `lnum`, `end_lnum`, `col`, `end_col`, `text` and a `type` of "E", "W" or
+    "I". Item N is the error |:FirstError| jumps to with count N, which makes
+    the list suitable for pickers.
 
 send_to_qflist()                               *compile-mode.send_to_qflist()*
     Loads all compilation errors into the quickfix list, replacing the
@@ -985,6 +1079,21 @@ statusline({colors})                               *compile-mode.statusline()*
     compilation buffer.
 
     Mapped to `<C-g>f` within the compilation buffer.
+
+:[N]CompileToggle                                           *:CompileToggle*
+    Open the compilation window if it is not visible in the current tabpage,
+    close it otherwise. Honours |compile-mode.window|, and the same modifiers
+    and count as |:Compile|.
+
+:CompileInput [text]                                          *:CompileInput*
+    Send [text] followed by a newline to the running compilation's stdin,
+    prompting for it when omitted. This is how to answer a program that
+    waits for input instead of leaving it hanging.
+
+    Mapped to `i` within the compilation buffer.
+
+:CompileEOF                                                     *:CompileEOF*
+    Close the running compilation's stdin, like CTRL-D in a terminal.
 
 :CompileGotoError                                          *:CompileGotoError*
     Only available within the compilation buffer itself.
@@ -1238,6 +1347,15 @@ You can create custom autocommands (see |:autocmd|) for certain compile-mode
 events by defining autocommands for the |User| event with the following
 patterns:
 
+CompilationStarted                                        *CompilationStarted*
+    Invoked right after the compilation job has started. The |event-data| is
+    a table with the following keys:
+
+        - {command} (string) the compilation command
+        - {bufnr} (integer) the buffer ID for the compilation buffer
+        - {job_id} (integer) the job ID, usable with |chansend()|
+        - {directory} (string) the directory the command runs in
+
 CompilationFinished                                      *CompilationFinished*
     Invoked when the compilation is finished. The |event-data| is a table with
     the following keys:
@@ -1246,6 +1364,9 @@ CompilationFinished                                      *CompilationFinished*
         - {code} (integer) the exit code of the executed command
         - {bufnr} (integer) the buffer ID for the compilation buffer with the
           output of the command
+        - {elapsed} (number) seconds the command ran for
+        - {directory} (string) the directory the command ran in
+        - {counts} (table) `{ error, warning, info }` totals of parsed errors
 
 CompilationInterrupted                                *CompilationInterrupted*
     Invoked when the compilation is interrupted (when another job is started
@@ -1255,6 +1376,7 @@ CompilationInterrupted                                *CompilationInterrupted*
         - {job_id} (integer) the job ID of the job which was interrupted
         - {bufnr} (integer) the buffer ID for the compilation buffer with the
           output of the command
+        - {command} (string) the command that was interrupted
 
 ==============================================================================
 11. Extensions                                       *compile-mode-extensions*

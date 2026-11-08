@@ -73,7 +73,12 @@ local function setup(config)
 	if mode == "render" then
 		local ok, baleia_mod = pcall(require, "baleia")
 		if ok then
-			baleia_instance = baleia_mod.setup(ansi_cfg.baleia_options or {})
+			-- baleia highlights on a timer by default (async = true), meant for colouring a
+			-- whole buffer at once. Output reaches it here one small batch at a time, so
+			-- synchronous highlighting is cheap and leaves the colours in place by the time
+			-- the batch is parsed or the run finishes. `baleia_options.async = true` restores it.
+			local options = vim.tbl_extend("keep", ansi_cfg.baleia_options or {}, { async = false })
+			baleia_instance = baleia_mod.setup(options)
 		else
 			log.warn("ansi_color.kind is 'render' but baleia.nvim could not be loaded. Falling back to 'filter'.")
 			mode = "filter"
@@ -342,8 +347,13 @@ function M.buf_set_lines(bufnr, start, end_, lines)
 		initialized = true
 	end
 	local fn = (mode == "render" and render) or (mode == "filter" and filter) or passthrough
+	-- output chunks land here, not in init.lua's set_lines, so auto_scroll has to be
+	-- honoured here too: follow only windows already at the end
+	local utils = require("compile-mode.utils")
+	local following = require("compile-mode.config.internal").auto_scroll and utils.windows_at_end(bufnr) or {}
 	vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
 	fn(bufnr, start, end_, lines)
+	utils.scroll_to_end(bufnr, following)
 	vim.schedule(function()
 		if vim.api.nvim_buf_is_valid(bufnr) then
 			vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })

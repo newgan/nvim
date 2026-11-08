@@ -124,6 +124,7 @@ local function validate_error_regexp_table(value)
 					row = { matcher.row, { "number", "table" }, true },
 					col = { matcher.col, { "number", "table" }, true },
 					type = { matcher.type, { "number", "table" }, true },
+					level_from_previous = { matcher.level_from_previous, "boolean", true },
 				}
 
 				local ok = vim.iter(validate_table):all(function(name, test)
@@ -161,7 +162,7 @@ local function validate_directory_matcher_list(value)
 				local validate_table = {
 					regex = validate_regex(matcher, "regex", "_rx"),
 					filename = { matcher.filename, "number" },
-					leaving = { matcher.filename, "number", true },
+					leaving = { matcher.leaving, "number", true },
 				}
 
 				local ok = vim.iter(validate_table):all(function(name, test)
@@ -183,6 +184,43 @@ end
 
 ---@param cfg CompileModeConfig
 ---@return string[] errors
+---@param value unknown
+---@return table
+local function validate_level_header_list(value)
+	return {
+		value,
+		function(header_list)
+			if type(header_list) ~= "table" then
+				return false
+			end
+
+			local err_msg = nil
+			local ok = vim.iter(header_list):all(function(header)
+				if type(header) ~= "table" then
+					err_msg = "expected table, got " .. type(header)
+					return false
+				end
+
+				local validate_table = {
+					regex = validate_regex(header, "regex", "_rx"),
+					level = validate_enum(header.level, compile_mode.level, "compile_mode.level.%s"),
+				}
+				local ok = vim.iter(validate_table):all(function(name, test)
+					local ok, err = pcall(vim_validate, name, unpack(test))
+					if not ok then
+						err_msg = err
+					end
+					return ok
+				end)
+				return ok
+			end)
+
+			return ok, err_msg
+		end,
+		"level header list",
+	}
+end
+
 function check.get_errors(cfg)
 	return get_errors_by_validate_table({
 		default_command = { cfg.default_command, { "string", "table", "function" } },
@@ -223,6 +261,13 @@ function check.get_errors(cfg)
 			end,
 			"positive integer",
 		},
+		max_line_length = {
+			cfg.max_line_length,
+			function(value)
+				return value == nil or value == false or (type(value) == "number" and value > 0 and value % 1 == 0)
+			end,
+			"positive integer or false",
+		},
 		hidden_output = validate_string_list(cfg.hidden_output, true),
 		environment = { cfg.environment, "table", true },
 		clear_environment = { cfg.clear_environment, "boolean" },
@@ -232,6 +277,28 @@ function check.get_errors(cfg)
 		auto_scroll = { cfg.auto_scroll, "boolean" },
 		debug = { cfg.debug, "boolean" },
 		use_pseudo_terminal = { cfg.use_pseudo_terminal, "boolean" },
+		error_level_headers = validate_level_header_list(cfg.error_level_headers),
+		live_quickfix = { cfg.live_quickfix, "boolean" },
+		live_diagnostics = { cfg.live_diagnostics, "boolean" },
+		flush_interval = {
+			cfg.flush_interval,
+			function(value)
+				return type(value) == "number" and value >= 0
+			end,
+			"non-negative number of milliseconds",
+		},
+		remember_commands = { cfg.remember_commands, "boolean" },
+		history_file = { cfg.history_file, "string" },
+		window = {
+			cfg.window,
+			function(value)
+				return type(value) == "table"
+					and vim.tbl_contains({ "", "aboveleft", "belowright", "topleft", "botright" }, value.split or "")
+					and (value.vertical == nil or type(value.vertical) == "boolean")
+					and (value.size == nil or (type(value.size) == "number" and value.size > 0))
+			end,
+			"table with optional split, vertical and size fields",
+		},
 	})
 end
 
@@ -250,6 +317,8 @@ function check.unrecognized_keys(tbl, default_tbl)
 		"baleia_setup",
 		"ansi_osc",
 		"max_lines",
+		"error_level_headers",
+		"window",
 	}
 
 	local keys = {}

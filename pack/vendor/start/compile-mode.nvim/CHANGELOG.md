@@ -8,6 +8,35 @@ Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
 
 ## [Unreleased]
 
+### Local changes (vendored copy in newgan/nvim)
+
+#### Added
+
+- `error_level_headers` and the per-matcher `level_from_previous` flag: two-line formats such as rustc's `error[E0308]: ...` followed by `  --> file:line:col` now get the header's level
+- `live_quickfix`: a "Compilation" quickfix list kept in sync while the command runs
+- `live_diagnostics`: errors published as diagnostics in their buffers as they arrive, keeping the compilation window open
+- `flush_interval`: output is batched before being written and parsed
+- `window`: default split, orientation and size of the compilation window, and `:CompileToggle` to open or close it
+- `:CompileInput` (mapped to `i` in the compilation buffer) and `:CompileEOF` to talk to the running process
+- `remember_commands` and `history_file`: the last command is remembered per directory across sessions
+- `CompilationStarted` event; `elapsed`, `directory` and `counts` in `CompilationFinished`; `command` in `CompilationInterrupted`
+- Failed compilations notify at error level, and the notification carries error and warning counts and the duration
+- `max_line_length`: very long lines are not run through the matcher table
+
+#### Fixed
+
+- Warnings exported as diagnostics had `severity.ERROR`
+- The directory matcher validator checked `filename` instead of `leaving`
+- Every run added another `BufDelete` handler to the compilation buffer
+- Auto-scroll dragged the cursor to the bottom on every chunk; now only windows already at the end follow, and output chunks follow too (they never scrolled after the ANSI refactor)
+- Filenames captured with surrounding whitespace (go test output) did not resolve
+- Capture group highlights are located exactly instead of by substring search
+- The health check reported a missing git tag as an error for a vendored copy
+- `name = false` in `error_regexp_table`, which the docs and validation allow, crashed the matcher sort
+- The matcher order was cached for the life of the process, so a reloaded config kept the old table
+- Jumping to an error whose line is past the end of the file raised an error from the locus highlight
+- Rendered ANSI colours arrived on a timer after the batch they belong to; baleia now highlights synchronously unless `baleia_options.async` says otherwise (this is also why the three render specs failed with baleia v1.4.0)
+
 Special thanks to [KlevisImeri](https://github.com/KlevisImeri) for all the work implementing the ANSI logic.
 
 ### Added

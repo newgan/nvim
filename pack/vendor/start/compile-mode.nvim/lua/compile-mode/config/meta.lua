@@ -129,6 +129,48 @@
 ---Use a pseudo terminal for command execution.
 ---For more info, run `:h compile-mode.use_pseudo_terminal`
 ---@field use_pseudo_terminal?      boolean
+---
+---Header lines (e.g. rustc's `error[E0308]: ...`) that give a level to the
+---location-only lines following them.
+---For more info, run `:h compile-mode.error_level_headers`
+---@field error_level_headers?      CompileModeLevelHeader[]
+---
+---Lines longer than this are not parsed for errors.
+---For more info, run `:h compile-mode.max_line_length`
+---@field max_line_length?          integer|false
+---
+---Keep the quickfix list in sync with the errors as they arrive.
+---For more info, run `:h compile-mode.live_quickfix`
+---@field live_quickfix?            boolean
+---
+---Publish errors as diagnostics in their buffers as they arrive.
+---For more info, run `:h compile-mode.live_diagnostics`
+---@field live_diagnostics?         boolean
+---
+---Milliseconds to batch output before writing it to the buffer.
+---For more info, run `:h compile-mode.flush_interval`
+---@field flush_interval?           number
+---
+---Default placement and size of the compilation window.
+---For more info, run `:h compile-mode.window`
+---@field window?                   CompileModeWindow
+---
+---Remember the last command per directory, across sessions.
+---For more info, run `:h compile-mode.remember_commands`
+---@field remember_commands?        boolean
+---
+---Where `remember_commands` keeps its history.
+---For more info, run `:h compile-mode.history_file`
+---@field history_file?             string
+
+---@class CompileModeLevelHeader
+---@field regex string
+---@field level CompileModeLevel
+
+---@class CompileModeWindow
+---@field split? SplitModifier
+---@field vertical? boolean
+---@field size? integer
 
 ---@type CompileModeOpts
 vim.g.compile_mode = vim.g.compile_mode

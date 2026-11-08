@@ -38,6 +38,8 @@ local default_config = {
 	time_format = "%a %b %e %H:%M:%S",
 	---@type integer|nil
 	max_lines = nil,
+	---@type integer|false
+	max_line_length = 4000,
 	---@type string[]
 	hidden_output = {},
 	---@type table<string, string>|nil
@@ -58,6 +60,20 @@ local default_config = {
 	use_circular_error_navigation = false,
 	---@type boolean
 	use_pseudo_terminal = false,
+	---@type CompileModeLevelHeader[]
+	error_level_headers = {},
+	---@type boolean
+	live_quickfix = false,
+	---@type boolean
+	live_diagnostics = false,
+	---@type number
+	flush_interval = 30,
+	---@type CompileModeWindow
+	window = { split = "", vertical = false, size = nil },
+	---@type boolean
+	remember_commands = false,
+	---@type string
+	history_file = vim.fs.joinpath(vim.fn.stdpath("state"), "compile-mode", "history.json"),
 	---@type CompileModeAnsiOsc
 	ansi_osc = {
 		kind = "render",
@@ -105,6 +121,14 @@ config.directory_change_matchers = vim.list_extend({
 	{ regex = [[\%(Entering\|Leavin\(g\)\) directory [`']\zs\(.\+\)\ze'$]], filename = 2, leaving = 1 },
 }, config.directory_change_matchers)
 config.error_ignore_file_list = vim.list_extend({ "/bin/[a-z]*sh$" }, config.error_ignore_file_list)
+-- headers give a level to the location-only lines that follow them (`level_from_previous`
+-- matchers, e.g. rustc's "  --> file:line:col"); user entries go first so they win
+config.error_level_headers = vim.list_extend(vim.deepcopy((user_config or {}).error_level_headers or {}), {
+	{ regex = [[^error\%(\[\|:\)]], level = compile_mode.level.ERROR },
+	{ regex = [[^warning\%(\[\|:\)]], level = compile_mode.level.WARNING },
+	{ regex = [[^\%(note\|help\):]], level = compile_mode.level.INFO },
+})
+config.window = vim.tbl_extend("force", default_config.window, config.window or {})
 config.hidden_output = type(config.hidden_output) == "string" and { config.hidden_output } or config.hidden_output
 
 local errors = check.get_errors(config)

@@ -320,6 +320,24 @@ local function numeric_range_and_value(line, range)
 	return { value = parsed, range = raw.range }
 end
 
+---Shrink a range so it excludes leading and trailing whitespace.
+---@param line string
+---@param range CompileModeRange
+---@return CompileModeRange|nil
+local function trim_range(line, range)
+	local start, end_ = range.start, range.end_
+	while start <= end_ and line:sub(start, start):match("%s") do
+		start = start + 1
+	end
+	while end_ >= start and line:sub(end_, end_):match("%s") do
+		end_ = end_ - 1
+	end
+	if start > end_ then
+		return nil
+	end
+	return { start = start, end_ = end_ }
+end
+
 ---Parse a line for errors using a specific matcher from `error_regexp_table`.
 ---@param matcher CompileModeRegexpMatcher|nil
 ---@param line string
@@ -339,6 +357,13 @@ local function parse_matcher(matcher, line, linenum)
 	end
 
 	local filename_range = result[matcher.filename + 1]
+	if not filename_range then
+		return nil
+	end
+	-- some matchers (notably `gnu`) accept leading blanks in the filename group, as in
+	-- go test's "    file_test.go:12:"; trim them so the path resolves and the
+	-- highlight starts on the name
+	filename_range = trim_range(line, filename_range)
 	if not filename_range then
 		return nil
 	end
@@ -415,7 +440,7 @@ local function map_to_diagnostic(bufnr, error)
 	if error.level == M.level.ERROR then
 		level = vim.diagnostic.severity.ERROR
 	elseif error.level == M.level.WARNING then
-		level = vim.diagnostic.severity.ERROR
+		level = vim.diagnostic.severity.WARN
 	else
 		level = vim.diagnostic.severity.INFO
 	end
@@ -430,10 +455,13 @@ local function map_to_diagnostic(bufnr, error)
 		lnum = lnum,
 		message = error.full_text,
 		severity = level,
+		source = "compile-mode",
 		end_col = error.end_col and error.end_col.value - 1 or col,
 		end_lnum = error.end_row and error.end_row.value - 1 or lnum,
 	}
 end
+
+M.map_to_diagnostic = map_to_diagnostic
 
 ---@param error_list table<integer, CompileModeError> table of compilation errors, usually `errors.error_list`
 ---@return vim.Diagnostic[]
@@ -450,25 +478,31 @@ function M.todiagnostic(bufnr, error_list)
 end
 
 local _cached_config = nil
+local _ordered = nil
 local function get_config()
-	if _cached_config then
-		return _cached_config
+	-- a reloaded config module (tests, or a user re-sourcing their config) must not keep
+	-- serving the previous matcher order
+	local current = require("compile-mode.config.internal")
+	if current ~= _cached_config then
+		_cached_config = current
+		_ordered = nil
 	end
-	_cached_config = require("compile-mode.config.internal")
-	return _cached_config
+	return current
 end
 
-local _ordered = nil
 local function get_ordered()
+	local config = get_config()
 	if _ordered then
 		return _ordered
 	end
 
-	local config = get_config()
 	_ordered = {}
 	for group, matcher in pairs(config.error_regexp_table) do
-		---@cast matcher CompileModeRegexpMatcher
-		table.insert(_ordered, { group = group, matcher = matcher })
+		-- `name = false` disables a built-in matcher
+		if matcher then
+			---@cast matcher CompileModeRegexpMatcher
+			table.insert(_ordered, { group = group, matcher = matcher })
+		end
 	end
 
 	table.sort(_ordered, function(a, b)
@@ -557,6 +591,8 @@ local function highlight_error(bufnr, error, linenum)
 		utils.add_highlight(bufnr, "CompileModeMessageCol", linenum, end_col_range)
 	end
 end
+
+M.highlight_error = highlight_error
 
 ---Highlight all errors in the compilation buffer.
 ---@param bufnr integer
