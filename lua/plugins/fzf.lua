@@ -1,19 +1,17 @@
+local fd_excludes = { "target", "node_modules", ".next", ".gitlab", "package-lock.json", "pnpm-lock.yaml", "yarn.lock" }
+
 require("fzf-lua").setup {
     fzf_colors = true,
     oldfiles = {
         include_current_session = true,
         cwd_only = true,
     },
-    file_ignore_patterns = {
-        "node_modules/",
-        "%.next/",
-        "%.git/",
-        "%.gitlab/",
-        "target/",
-        "package%-lock%.json",
-        "pnpm%-lock%.yaml",
-        "yarn%.lock",
-        "dependencies/",
+    files = {
+        fd_opts = require("fzf-lua.defaults").defaults.files.fd_opts
+            .. " --exclude " .. table.concat(fd_excludes, " --exclude "),
+    },
+    grep = {
+        file_ignore_patterns = { "package%-lock%.json$", "pnpm%-lock%.yaml$", "yarn%.lock$" },
     },
 }
 
@@ -34,7 +32,11 @@ vim.keymap.set("n", "<leader>fZ", "<cmd>FzfLua diagnostics_workspace<cr>", { des
 vim.keymap.set("n", "<leader>fg", "<cmd>FzfLua git_files<cr>", { desc = "find git files" })
 vim.keymap.set("n", "<leader>gc", "<cmd>FzfLua git_commits<cr>", { desc = "find git commits" })
 vim.keymap.set("n", "<leader>gC", "<cmd>FzfLua git_bcommits<cr>", { desc = "find git b commits" })
+vim.keymap.set("n", "<leader>gs", "<cmd>FzfLua git_status<cr>", { desc = "git status (stage / unstage)" })
+vim.keymap.set("n", "<leader>hf", "<cmd>FzfLua git_hunks<cr>", { desc = "find hunks across the repo" })
+vim.keymap.set("n", "<leader>gw", "<cmd>FzfLua git_worktrees<cr>", { desc = "switch worktree (:cd)" })
 
+vim.keymap.set("n", "<leader>fw", "<cmd>FzfLua lsp_live_workspace_symbols<cr>", { desc = "find workspace symbols" })
 vim.keymap.set("n", "<leader>fk", "<cmd>FzfLua keymaps<cr>", { desc = "find keymaps (command palette)" })
 vim.keymap.set("n", "<leader>fh", "<cmd>FzfLua helptags<cr>", { desc = "find help" })
 vim.keymap.set("n", "<leader>f.", "<cmd>FzfLua resume<cr>", { desc = "resume last picker" })

@@ -2,7 +2,6 @@ local wk = require("which-key")
 
 wk.setup({
     delay = 300,
-    icons = { mappings = false },
 })
 
 wk.add({

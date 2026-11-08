@@ -7,7 +7,6 @@ vim.lsp.config('lua_ls', {
     settings = {
         Lua = {
             runtime = { version = "LuaJIT" },
-            telemetry = { enable = false },
         },
     },
 })
@@ -19,10 +18,6 @@ return {
         Lua = {
             codeLens = { enable = true },
             hint = { enable = true, semicolon = "Disable" },
-            defaultConfig = {
-                indent_style = "space",
-                indent_size = "4",
-            },
         },
     },
 }

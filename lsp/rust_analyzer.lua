@@ -1,10 +1,6 @@
 return {
 	cmd = { "rust-analyzer" },
 	filetypes = { "rust" },
-	root_markers = {
-		"Cargo.toml",
-		".git",
-	},
 	settings = {
 		["rust-analyzer"] = {
 			checkOnSave = false,
@@ -12,7 +8,7 @@ return {
 				granularity = {
 					group = "module",
 				},
-				prefix = "self",
+				prefix = "crate",
 			},
 			cargo = {
 				buildScripts = {
@@ -20,9 +16,6 @@ return {
 				},
 			},
 			procMacro = {
-				enable = true,
-			},
-			inlayHints = {
 				enable = true,
 			},
 		},

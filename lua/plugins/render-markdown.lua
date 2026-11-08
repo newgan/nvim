@@ -9,4 +9,5 @@ end
 
 require("render-markdown").setup({
     completions = { blink = { enabled = true } },
+    sign = { enabled = false },
 })

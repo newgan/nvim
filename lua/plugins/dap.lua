@@ -3,11 +3,7 @@ local dapui = require("dapui")
 
 local native
 if vim.fn.executable("codelldb") == 1 then
-    dap.adapters.codelldb = {
-        type = "server",
-        port = "${port}",
-        executable = { command = "codelldb", args = { "--port", "${port}" } },
-    }
+    dap.adapters.codelldb = { type = "executable", command = "codelldb" }
     native = "codelldb"
 elseif vim.fn.executable("lldb-dap") == 1 then
     dap.adapters.lldb = { type = "executable", command = "lldb-dap" }
@@ -46,6 +42,7 @@ dap.configurations.rust = {
         program = pick_executable("target/debug/"),
         cwd = "${workspaceFolder}",
         stopOnEntry = false,
+        sourceLanguages = native == "codelldb" and { "rust" } or nil,
     },
 }
 
@@ -87,7 +84,7 @@ dap.configurations.python = {
     },
 }
 
-dapui.setup()
+dapui.setup({ floating = { border = vim.o.winborder } })
 dap.listeners.before.attach.dapui_config = function() dapui.open() end
 dap.listeners.before.launch.dapui_config = function() dapui.open() end
 dap.listeners.before.event_terminated.dapui_config = function() dapui.close() end
@@ -105,6 +102,7 @@ map("n", "<F9>", dap.toggle_breakpoint, { desc = "debug: toggle breakpoint" })
 map("n", "<F10>", dap.step_over, { desc = "debug: step over" })
 map("n", "<F11>", dap.step_into, { desc = "debug: step into" })
 map("n", "<S-F11>", dap.step_out, { desc = "debug: step out" })
+map("n", "<F23>", dap.step_out, { desc = "debug: step out" })
 
 map("n", "<leader>dc", dap.continue, { desc = "continue / start" })
 map("n", "<leader>db", dap.toggle_breakpoint, { desc = "toggle breakpoint" })

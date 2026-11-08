@@ -1,4 +1,6 @@
-require("grug-far").setup({})
+require("grug-far").setup({
+    enabledEngines = { "ripgrep" },
+})
 
 vim.keymap.set("n", "<leader>fR", function()
     require("grug-far").open({ transient = true })

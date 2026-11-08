@@ -1,32 +1,16 @@
-vim.api.nvim_create_autocmd('FileType', {
-    group = vim.api.nvim_create_augroup("TreeSitterSetup", { clear = true }),
-    callback = function(ev)
-        local lang = vim.treesitter.language.get_lang(ev.match)
-        local ts = require('nvim-treesitter')
-        if not lang or not vim.tbl_contains(ts.get_available(), lang) then
-            return
-        end
-        local function start()
-            if vim.api.nvim_buf_is_valid(ev.buf) then
-                pcall(vim.treesitter.start, ev.buf, lang)
-            end
-        end
-        if vim.tbl_contains(ts.get_installed(), lang) then
-            start()
-        else
-            ts.install(lang):await(function(err)
-                if not err then
-                    vim.schedule(start)
-                end
-            end)
-        end
-    end,
-    desc = "Enable nvim-treesitter and install parser if not installed"
-})
-
 -- disable lsp highlighting and add formatting
 local format_group = vim.api.nvim_create_augroup('my.lsp.format', { clear = true })
-local no_format_on_save = { yamlls = true, taplo = true, dockerls = true, helm_ls = true, clangd = true }
+local no_format_on_save = { yamlls = true, taplo = true, dockerls = true, helm_ls = true, tsc = true }
+
+local function wants_format_on_save(client, bufnr)
+    if no_format_on_save[client.name] then
+        return false
+    end
+    if client.name == "clangd" then
+        return vim.fs.root(bufnr, { ".clang-format", "_clang-format" }) ~= nil
+    end
+    return true
+end
 vim.api.nvim_create_autocmd("LspAttach", {
     group = vim.api.nvim_create_augroup("LspFormatting", { clear = true }),
     callback = function(ev)
@@ -45,7 +29,9 @@ vim.api.nvim_create_autocmd("LspAttach", {
                 group = format_group,
                 buffer = ev.buf,
                 callback = function()
-                    vim.lsp.buf.format({ bufnr = ev.buf, id = client.id, timeout_ms = 1000 })
+                    if wants_format_on_save(client, ev.buf) then
+                        vim.lsp.buf.format({ bufnr = ev.buf, id = client.id, timeout_ms = 1000 })
+                    end
                 end,
             })
         end

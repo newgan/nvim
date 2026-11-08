@@ -1,14 +1,11 @@
 vim.api.nvim_create_autocmd('PackChanged', {
     group = vim.api.nvim_create_augroup('pack_changed', { clear = true }),
     callback = function(ev)
-        if ev.data.kind == 'delete' then
-            return
-        end
-        local name = ev.data.spec.name
-        if name == 'nvim-treesitter' then
-            pcall(function()
-                vim.cmd('TSUpdate')
-            end)
+        if ev.data.spec.name == 'nvim-treesitter' and ev.data.kind == 'update' then
+            if not ev.data.active then
+                vim.cmd.packadd('nvim-treesitter')
+            end
+            require('nvim-treesitter').update()
         end
     end,
 })
@@ -44,7 +41,7 @@ vim.pack.add({
     { src = "https://github.com/stevearc/oil.nvim" },
 
     { src = "https://github.com/lewis6991/gitsigns.nvim" },
-    { src = "https://github.com/sindrets/diffview.nvim" },
+    { src = "https://github.com/dlyongemallo/diffview-plus.nvim" },
 
     -- lualine
     { src = "https://github.com/nvim-lualine/lualine.nvim" },
@@ -56,6 +53,9 @@ vim.pack.add({
     { src = "https://github.com/folke/trouble.nvim" },
     { src = "https://github.com/Bekaboo/dropbar.nvim" },
     { src = "https://github.com/MeanderingProgrammer/render-markdown.nvim" },
+    { src = "https://github.com/saghen/blink.indent" },
+    { src = "https://github.com/lewis6991/satellite.nvim" },
+    { src = "https://github.com/stevearc/quicker.nvim" },
 
     { src = "https://github.com/folke/persistence.nvim" },
 
@@ -64,7 +64,9 @@ vim.pack.add({
     { src = "https://github.com/nvim-neotest/nvim-nio" },
     { src = "https://github.com/mfussenegger/nvim-dap" },
     { src = "https://github.com/rcarriga/nvim-dap-ui" },
-}, { load = true, confirm = false })
+}, {
+    confirm = false,
+})
 
 require('mini.icons').setup()
 require('mini.icons').mock_nvim_web_devicons()
@@ -84,6 +86,9 @@ require("plugins.grug-far")
 require("plugins.trouble")
 require("plugins.dropbar")
 require("plugins.render-markdown")
+require("plugins.blink-indent")
+require("plugins.satellite")
+require("plugins.quicker")
 require("plugins.persistence")
 require("plugins.lazydev")
 require("plugins.dap")

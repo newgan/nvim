@@ -12,7 +12,7 @@ vim.lsp.enable("clangd")
 vim.lsp.enable("lua_ls")        -- lua
 vim.lsp.enable("rust_analyzer") -- rust
 vim.lsp.enable("gopls")         -- go
-vim.lsp.enable("ts_ls")         -- ts, js
+vim.lsp.enable("tsc")
 vim.lsp.enable("ruff")          -- python
 vim.lsp.enable("ty")            -- python
 vim.lsp.enable("cmake")
@@ -49,9 +49,6 @@ vim.api.nvim_create_autocmd("LspAttach", {
         opts.desc = "Smart rename"
         vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
 
-        opts.desc = "Show buffer diagnostics"
-        vim.keymap.set("n", "<leader>D", "<cmd>FzfLua diagnostics bufnr=0<CR>", opts)
-
         opts.desc = "Show line diagnostics"
         vim.keymap.set("n", "<leader>cd", function()
             vim.diagnostic.open_float(nil, { scope = "line", focus = false })
@@ -71,6 +68,19 @@ vim.api.nvim_create_autocmd("LspAttach", {
 
         if client and client:supports_method("textDocument/codeLens") then
             vim.lsp.codelens.enable(true, { bufnr = ev.buf })
+        end
+
+        if client and client.name == "rust_analyzer" then
+            opts.desc = "cargo check (rust-analyzer)"
+            vim.keymap.set("n", "<leader>ck", function()
+                client:notify("rust-analyzer/runFlycheck", {
+                    textDocument = vim.lsp.util.make_text_document_params(ev.buf),
+                })
+            end, opts)
+        end
+
+        if client and client.name == "rust_analyzer" then
+            vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
         end
 
         if client and client.name == "clangd" then

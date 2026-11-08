@@ -4,13 +4,14 @@ require("blink.cmp").setup {
     },
     keymap = {
         preset = "enter",
-        ["<Tab>"] = { "select_next", "snippet_forward", "fallback" },
-        ["<S-Tab>"] = { "select_prev", "snippet_backward", "fallback" },
+        ["<Tab>"] = { "snippet_forward", "select_next", "fallback" },
+        ["<S-Tab>"] = { "snippet_backward", "select_prev", "fallback" },
     },
     completion = {
         list = {
             selection = {
                 preselect = false,
+                auto_insert = false,
             },
         },
         documentation = {
@@ -25,6 +26,11 @@ require("blink.cmp").setup {
     sources = {
         default = { 'lazydev', 'lsp', 'path', 'snippets', 'buffer' },
         providers = {
+            snippets = {
+                should_show_items = function(ctx)
+                    return ctx.trigger.initial_kind ~= "trigger_character"
+                end,
+            },
             lazydev = {
                 name = "LazyDev",
                 module = "lazydev.integrations.blink",
@@ -33,7 +39,16 @@ require("blink.cmp").setup {
         },
     },
     cmdline = {
-        keymap = { preset = 'inherit' },
+        keymap = {
+            preset = 'inherit',
+            ['<Tab>'] = { 'select_next', 'show' },
+            ['<S-Tab>'] = { 'select_prev', 'show' },
+            ['<CR>'] = { 'accept_and_enter', 'fallback' },
+            ['<C-n>'] = { 'select_next', 'fallback' },
+            ['<C-p>'] = { 'select_prev', 'fallback' },
+            ['<Up>'] = false,
+            ['<Down>'] = false,
+        },
         completion = {
             list = {
                 selection = {

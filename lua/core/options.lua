@@ -5,8 +5,7 @@ vim.g.mapleader = " "
 vim.opt.number = true
 -- line number relative to current line
 vim.opt.relativenumber = true
--- min sign col width
-vim.o.signcolumn = "yes:1"
+vim.o.signcolumn = "yes:2"
 vim.o.numberwidth = 2
 -- hide cmd line by default
 vim.o.cmdheight = 0
@@ -22,8 +21,6 @@ vim.o.inccommand = "split"
 vim.o.updatetime = 250
 
 
-vim.o.foldmethod = "expr"
-vim.o.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 vim.o.foldlevel = 99
 vim.o.foldlevelstart = 99
 vim.o.foldtext = ""
@@ -56,7 +53,7 @@ vim.opt.smartcase = true
 -- color --
 -- 24 bit colors
 vim.opt.termguicolors = true
-vim.cmd.colorscheme("true-gruber-darker")
+vim.cmd.colorscheme("orca-oled")
 
 
 -- clipboard --

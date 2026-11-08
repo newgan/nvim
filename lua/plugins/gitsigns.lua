@@ -24,7 +24,8 @@ require('gitsigns').setup {
         follow_files = true
     },
     auto_attach                  = true,
-    attach_to_untracked          = false,
+    attach_to_untracked          = true,
+    trouble                      = false,
     current_line_blame           = false, -- Toggle with `:Gitsigns toggle_current_line_blame`
     current_line_blame_opts      = {
         virt_text = true,
@@ -84,7 +85,18 @@ require('gitsigns').setup {
             gs.blame_line({ full = true })
         end, 'blame line')
         map('n', '<leader>hq', gs.setqflist, 'hunks to quickfix')
+        map('n', '<leader>gd', gs.diffthis, 'diff buffer against index')
         map('n', '<leader>tb', gs.toggle_current_line_blame, 'toggle line blame')
+
+        map('n', '<leader>hB', function()
+            local base = require('core.git').merge_base(vim.fs.dirname(vim.api.nvim_buf_get_name(bufnr)))
+            if base then
+                gs.change_base(base, true)
+            end
+        end, 'hunks vs merge base')
+        map('n', '<leader>hI', function()
+            gs.reset_base(true)
+        end, 'hunks vs index')
 
         map({ 'o', 'x' }, 'ih', gs.select_hunk, 'select hunk')
     end,

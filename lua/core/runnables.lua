@@ -38,7 +38,7 @@ end
 
 function M.run(runnable)
     local args = runnable.args
-    compile(args.cwd or args.workspaceRoot, shell_line(cargo_words(args), args.executableArgs, args.environment))
+    compile(args.workspaceRoot or args.cwd, shell_line(cargo_words(args), args.executableArgs, args.environment))
 end
 
 local function build_words(args)
@@ -73,7 +73,7 @@ function M.debug(runnable)
         function(out)
             vim.schedule(function()
                 if out.code ~= 0 then
-                    return compile(cwd, shell_line(words, nil, args.environment))
+                    return compile(args.workspaceRoot or cwd, shell_line(words, nil, args.environment))
                 end
                 local exe = executable_from(out.stdout or "")
                 if not exe then

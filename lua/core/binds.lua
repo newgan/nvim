@@ -9,8 +9,6 @@ vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = 'move to bottom split' })
 vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = 'move to top split' })
 vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = 'move to right split' })
 
-vim.keymap.set('n', '<leader>gd', '<cmd>Gitsigns diffthis<CR>', { desc = "gitsigns diff" })
-
 vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "clear search highlights" })
 vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "exit terminal mode" })
 
