@@ -1,4 +1,9 @@
 local fd_excludes = { "target", "node_modules", ".next", ".gitlab", "package-lock.json", "pnpm-lock.yaml", "yarn.lock" }
+local fd_opts = require("fzf-lua.defaults").defaults.files.fd_opts
+    .. " --exclude " .. table.concat(fd_excludes, " --exclude ")
+
+local rg_opts = '-g "!package-lock.json" -g "!pnpm-lock.yaml" -g "!yarn.lock" '
+    .. require("fzf-lua.defaults").defaults.grep.rg_opts
 
 require("fzf-lua").setup {
     fzf_colors = true,
@@ -6,13 +11,9 @@ require("fzf-lua").setup {
         include_current_session = true,
         cwd_only = true,
     },
-    files = {
-        fd_opts = require("fzf-lua.defaults").defaults.files.fd_opts
-            .. " --exclude " .. table.concat(fd_excludes, " --exclude "),
-    },
-    grep = {
-        file_ignore_patterns = { "package%-lock%.json$", "pnpm%-lock%.yaml$", "yarn%.lock$" },
-    },
+    files = { fd_opts = fd_opts },
+    global = { fd_opts = fd_opts },
+    grep = { rg_opts = rg_opts },
 }
 
 require("fzf-lua").register_ui_select()

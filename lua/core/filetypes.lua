@@ -1,8 +1,14 @@
+local function helm(path)
+    if vim.fs.root(path, "Chart.yaml") then
+        return "helm"
+    end
+end
+
 vim.filetype.add({
     extension = { nomad = "hcl" },
     pattern = {
-        [".*/charts/[^/]+/templates/.*%.ya?ml"] = "helm",
-        [".*/charts/[^/]+/templates/NOTES%.txt"] = "helm",
-        [".*/templates/.*%.tpl"] = "helm",
+        [".*/templates/.*%.ya?ml"] = helm,
+        [".*/templates/NOTES%.txt"] = helm,
+        [".*/charts/.*%.tpl"] = "helm",
     },
 })

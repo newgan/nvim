@@ -9,6 +9,7 @@ vim.o.signcolumn = "yes:2"
 vim.o.numberwidth = 2
 -- hide cmd line by default
 vim.o.cmdheight = 0
+vim.o.showcmdloc = "statusline"
 vim.o.splitright = true
 vim.o.splitbelow = true
 -- multi line text behavior

@@ -46,21 +46,6 @@ vim.api.nvim_create_autocmd('TextYankPost', {
     end,
 })
 
--- lsp progress bar
-vim.api.nvim_create_autocmd('LspProgress', {
-    callback = function(ev)
-        local value = ev.data.params.value
-        vim.api.nvim_echo({ { value.message or 'done' } }, false, {
-            id = 'lsp.' .. ev.data.params.token,
-            kind = 'progress',
-            source = 'vim.lsp',
-            title = value.title,
-            status = value.kind ~= 'end' and 'running' or 'success',
-            percent = value.percentage,
-        })
-    end,
-})
-
 local function strip_bold()
     for name, hl in pairs(vim.api.nvim_get_hl(0, {})) do
         if hl.bold or (hl.cterm and hl.cterm.bold) then

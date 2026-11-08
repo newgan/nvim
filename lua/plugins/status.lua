@@ -77,7 +77,7 @@ require('lualine').setup {
             },
         },
         lualine_c = { { 'filename', path = 1 } },
-        lualine_x = { compile_status },
+        lualine_x = { compile_status, "searchcount", "%S" },
         lualine_y = { 'progress' },
         lualine_z = {
             "diagnostics",
