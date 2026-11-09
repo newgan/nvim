@@ -61,6 +61,10 @@ vim.pack.add({
 
     { src = "https://github.com/folke/lazydev.nvim" },
 
+    -- colorscheme
+    { src = "https://github.com/rktjmp/lush.nvim" },
+    { src = "https://github.com/zenbones-theme/zenbones.nvim" },
+
     { src = "https://github.com/nvim-neotest/nvim-nio" },
     { src = "https://github.com/mfussenegger/nvim-dap" },
     { src = "https://github.com/rcarriga/nvim-dap-ui" },
@@ -70,6 +74,8 @@ vim.pack.add({
 
 require('mini.icons').setup()
 require('mini.icons').mock_nvim_web_devicons()
+
+require("plugins.colorscheme")
 
 require("plugins.gitsigns")
 require("plugins.diffview")

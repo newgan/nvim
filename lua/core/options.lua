@@ -54,7 +54,6 @@ vim.opt.smartcase = true
 -- color --
 -- 24 bit colors
 vim.opt.termguicolors = true
-vim.cmd.colorscheme("orca-oled")
 
 
 -- clipboard --
