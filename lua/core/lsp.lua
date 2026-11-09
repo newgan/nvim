@@ -87,6 +87,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
 
         if client and client.name == "rust_analyzer" then
             vim.lsp.inlay_hint.enable(true, { bufnr = ev.buf })
+            vim.lsp.on_type_formatting.enable(true, { client_id = client.id })
         end
 
         if client and client.name == "clangd" then

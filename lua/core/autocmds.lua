@@ -1,39 +1,66 @@
 -- disable lsp highlighting and add formatting
-local format_group = vim.api.nvim_create_augroup('my.lsp.format', { clear = true })
-local no_format_on_save = { yamlls = true, taplo = true, dockerls = true, helm_ls = true, tsc = true }
-
-local function wants_format_on_save(client, bufnr)
-    if no_format_on_save[client.name] then
-        return false
-    end
-    if client.name == "clangd" then
-        return vim.fs.root(bufnr, { ".clang-format", "_clang-format" }) ~= nil
-    end
-    return true
+local function ruff_configured(bufnr)
+    return vim.fs.root(bufnr, function(name, path)
+        if name == "ruff.toml" or name == ".ruff.toml" then
+            return true
+        end
+        if name ~= "pyproject.toml" then
+            return false
+        end
+        local f = io.open(vim.fs.joinpath(path, name))
+        if not f then
+            return false
+        end
+        local text = f:read("*a")
+        f:close()
+        return text:find("[tool.ruff", 1, true) ~= nil
+    end) ~= nil
 end
+
+local format_on_save = {
+    rust_analyzer = true,
+    gopls = true,
+    clangd = { ".clang-format", "_clang-format" },
+    lua_ls = { ".editorconfig" },
+    ruff = ruff_configured,
+    cmake = { ".cmake-format", ".cmake-format.yaml" },
+    yamlls = false,
+    taplo = false,
+    dockerls = false,
+    helm_ls = false,
+    tsc = false,
+    bashls = false,
+}
+
+local function formats_on_save(client, bufnr)
+    local rule = format_on_save[client.name]
+    if type(rule) == "function" then
+        return rule(bufnr)
+    end
+    if type(rule) == "table" then
+        return vim.fs.root(bufnr, rule) ~= nil
+    end
+    return rule ~= false
+end
+
 vim.api.nvim_create_autocmd("LspAttach", {
     group = vim.api.nvim_create_augroup("LspFormatting", { clear = true }),
     callback = function(ev)
         local client = vim.lsp.get_client_by_id(ev.data.client_id)
-        if not client then return end
-
-        if client.server_capabilities then
+        if client and client.server_capabilities then
             client.server_capabilities.semanticTokensProvider = nil
         end
+    end,
+})
 
-        if not no_format_on_save[client.name]
-            and not client:supports_method('textDocument/willSaveWaitUntil')
-            and client:supports_method('textDocument/formatting') then
-            vim.api.nvim_clear_autocmds({ group = format_group, buffer = ev.buf })
-            vim.api.nvim_create_autocmd('BufWritePre', {
-                group = format_group,
-                buffer = ev.buf,
-                callback = function()
-                    if wants_format_on_save(client, ev.buf) then
-                        vim.lsp.buf.format({ bufnr = ev.buf, id = client.id, timeout_ms = 1000 })
-                    end
-                end,
-            })
+vim.api.nvim_create_autocmd("BufWritePre", {
+    group = vim.api.nvim_create_augroup("my.lsp.format", { clear = true }),
+    callback = function(ev)
+        for _, client in ipairs(vim.lsp.get_clients({ bufnr = ev.buf, method = "textDocument/formatting" })) do
+            if not client:supports_method("textDocument/willSaveWaitUntil", ev.buf) and formats_on_save(client, ev.buf) then
+                vim.lsp.buf.format({ bufnr = ev.buf, id = client.id, timeout_ms = 1000 })
+                return
+            end
         end
     end,
 })
