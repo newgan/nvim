@@ -7,6 +7,16 @@ local function quote(word)
     return word
 end
 
+local function clean(args)
+    local out = {}
+    for k, v in pairs(args or {}) do
+        if v ~= vim.NIL then
+            out[k] = v
+        end
+    end
+    return out
+end
+
 local function cargo_words(args, extra)
     local words = { args.overrideCargo or "cargo" }
     vim.list_extend(words, args.cargoArgs or {})
@@ -37,7 +47,7 @@ local function compile(cwd, line)
 end
 
 function M.run(runnable)
-    local args = runnable.args
+    local args = clean(runnable.args)
     compile(args.workspaceRoot or args.cwd, shell_line(cargo_words(args), args.executableArgs, args.environment))
 end
 
@@ -65,7 +75,7 @@ local function executable_from(json_lines)
 end
 
 function M.debug(runnable)
-    local args = runnable.args
+    local args = clean(runnable.args)
     local cwd = args.cwd or args.workspaceRoot
     local words = build_words(args)
     vim.notify("building " .. runnable.label)
