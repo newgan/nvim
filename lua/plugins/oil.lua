@@ -245,4 +245,15 @@ vim.api.nvim_create_autocmd("TextChanged", {
     end,
 })
 
+vim.api.nvim_create_autocmd("User", {
+    group = vim.api.nvim_create_augroup("OilAutoPreview", { clear = true }),
+    pattern = "OilEnter",
+    callback = vim.schedule_wrap(function(ev)
+        local oil = require("oil")
+        if ev.data.buf == vim.api.nvim_get_current_buf() and not vim.w.oil_preview and oil.get_cursor_entry() then
+            oil.open_preview()
+        end
+    end),
+})
+
 vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" })
