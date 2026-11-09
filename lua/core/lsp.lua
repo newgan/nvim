@@ -47,7 +47,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
         vim.keymap.set("n", "gri", "<cmd>FzfLua lsp_implementations<CR>", opts)
 
         opts.desc = "Show LSP type definitions"
-        vim.keymap.set("n", "grt", "<cmd>FzfLua lsp_type_definitions<CR>", opts)
+        vim.keymap.set("n", "grt", "<cmd>FzfLua lsp_typedefs<CR>", opts)
 
         opts.desc = "See available code actions"
         vim.keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
