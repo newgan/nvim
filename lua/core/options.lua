@@ -57,7 +57,26 @@ vim.opt.termguicolors = true
 
 
 -- clipboard --
-vim.g.clipboard = "pbcopy"
+if vim.fn.has("mac") == 1 then
+    vim.g.clipboard = "pbcopy"
+else
+    local osc52 = require("vim.ui.clipboard.osc52")
+    vim.g.clipboard = {
+        name = "osc52",
+        copy = {
+            ["+"] = osc52.copy("+"),
+            ["*"] = osc52.copy("*"),
+        },
+        paste = {
+            ["+"] = function()
+                return vim.split(vim.fn.getreg('"'), "\n")
+            end,
+            ["*"] = function()
+                return vim.split(vim.fn.getreg('"'), "\n")
+            end,
+        },
+    }
+end
 
 vim.opt.clipboard:append("unnamedplus")
 
