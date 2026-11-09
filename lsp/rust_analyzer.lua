@@ -3,7 +3,6 @@ return {
 	filetypes = { "rust" },
 	settings = {
 		["rust-analyzer"] = {
-			checkOnSave = false,
 			imports = {
 				granularity = {
 					group = "module",
